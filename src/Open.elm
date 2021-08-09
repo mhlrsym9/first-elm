@@ -129,68 +129,94 @@ matchingProjectDescription : String -> String -> ProjectDescription -> Bool
 matchingProjectDescription kcc lcc { l1, l2 } =
     ((kcc == "") || (kcc == l1)) && ((lcc == "") || (lcc == l2))
 
+updateKnownLanguagesFilter : LanguageSelect.Msg -> Data -> (Model, Cmd Msg)
+updateKnownLanguagesFilter learningLanguageMsg data =
+    let
+        ( updatedModel, updatedCmd ) =
+            LanguageSelect.update learningLanguageMsg data.learningLanguageModel
+        kcc = LanguageSelect.getContentCode data.knownLanguageModel
+        lcc = LanguageSelect.getContentCode updatedModel
+        updatedProjectDescriptions = matchedProjectDescriptions data.projectDescriptions matchingProjectDescription kcc lcc
+        uniqueKnownContentCodes = extractContentCodes updatedProjectDescriptions (\{ l1 } -> l1)
+    in
+    ( Success
+        { data | learningLanguageModel = updatedModel
+        , displayedProjectDescriptions = updatedProjectDescriptions
+        }
+    , Cmd.batch
+        [ Cmd.map LearningLanguageMsg updatedCmd
+        , Cmd.map KnownLanguageMsg (LanguageSelect.setAvailableLanguages uniqueKnownContentCodes data.knownLanguageModel)
+        ]
+    )
 
+justPassthroughKnownLanguagesFilter : LanguageSelect.Msg -> Data -> (Model, Cmd Msg)
+justPassthroughKnownLanguagesFilter knownLanguageMsg data =
+    let
+        ( updatedModel, updatedCmd ) =
+            LanguageSelect.update knownLanguageMsg data.knownLanguageModel
+    in
+    ( Success { data | knownLanguageModel = updatedModel }
+    , Cmd.map KnownLanguageMsg updatedCmd
+    )
+
+updateLearningLanguagesFilter : LanguageSelect.Msg -> Data -> (Model, Cmd Msg)
+updateLearningLanguagesFilter knownLanguageMsg data =
+    let
+        ( updatedModel, updatedCmd ) =
+            LanguageSelect.update knownLanguageMsg data.knownLanguageModel
+        kcc = LanguageSelect.getContentCode updatedModel
+        lcc = LanguageSelect.getContentCode data.learningLanguageModel
+        updatedProjectDescriptions = matchedProjectDescriptions data.projectDescriptions matchingProjectDescription kcc lcc
+        uniqueLearningContentCodes = extractContentCodes updatedProjectDescriptions (\{ l2 } -> l2)
+    in
+    ( Success
+        { data | knownLanguageModel = updatedModel
+        , displayedProjectDescriptions = updatedProjectDescriptions
+        }
+    , Cmd.batch
+        [ Cmd.map KnownLanguageMsg updatedCmd
+        , Cmd.map LearningLanguageMsg (LanguageSelect.setAvailableLanguages uniqueLearningContentCodes data.learningLanguageModel)
+        ]
+    )
+
+justPassthroughLearningLanguagesFilter : LanguageSelect.Msg -> Data -> (Model, Cmd Msg)
+justPassthroughLearningLanguagesFilter learningLanguageMsg data =
+    let
+        ( updatedModel, updatedCmd ) =
+            LanguageSelect.update learningLanguageMsg data.learningLanguageModel
+    in
+    ( Success { data | learningLanguageModel = updatedModel }
+    , Cmd.map LearningLanguageMsg updatedCmd
+    )
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
     case ( msg, model ) of
         ( KnownLanguageMsg knownLanguageMsg, Success data ) ->
---            case data.projectDescriptions of
---                Api.Loaded pds ->
-                    let
-                        ( updatedModel, updatedCmd ) =
-                            LanguageSelect.update knownLanguageMsg data.knownLanguageModel
-                        kcc = LanguageSelect.getContentCode updatedModel
-                        lcc = LanguageSelect.getContentCode data.learningLanguageModel
-                        updatedProjectDescriptions = matchedProjectDescriptions data.projectDescriptions matchingProjectDescription kcc lcc
-                        uniqueLearningContentCodes = extractContentCodes updatedProjectDescriptions (\{ l2 } -> l2)
-                    in
-                    ( Success
-                        { data | knownLanguageModel = updatedModel
-                        , displayedProjectDescriptions = updatedProjectDescriptions
-                        }
-                    , Cmd.batch
-                        [ Cmd.map KnownLanguageMsg updatedCmd
-                        , Cmd.map LearningLanguageMsg (LanguageSelect.setAvailableLanguages uniqueLearningContentCodes data.learningLanguageModel knownLanguageMsg)
-                        ]
-                    )
---                other ->
---                    let
---                        ( updatedModel, updatedCmd ) =
---                            LanguageSelect.update knownLanguageMsg data.knownLanguageModel
---                    in
---                    ( Success { data | knownLanguageModel = updatedModel }
---                    , Cmd.map KnownLanguageMsg updatedCmd
---                    )
+            case data.projectDescriptions of
+                Api.Loaded _ ->
+                    case knownLanguageMsg of
+                        LanguageSelect.UpdateLanguage _ ->
+                            updateLearningLanguagesFilter knownLanguageMsg data
+
+                        _ ->
+                            justPassthroughKnownLanguagesFilter knownLanguageMsg data
+
+                _ ->
+                    justPassthroughKnownLanguagesFilter knownLanguageMsg data
 
         ( LearningLanguageMsg learningLanguageMsg, Success data ) ->
---            case data.projectDescriptions of
---                Api.Loaded pds ->
-                    let
-                        ( updatedModel, updatedCmd ) =
-                            LanguageSelect.update learningLanguageMsg data.learningLanguageModel
-                        kcc = LanguageSelect.getContentCode data.knownLanguageModel
-                        lcc = LanguageSelect.getContentCode updatedModel
-                        updatedProjectDescriptions = matchedProjectDescriptions data.projectDescriptions matchingProjectDescription kcc lcc
-                        uniqueKnownContentCodes = extractContentCodes updatedProjectDescriptions (\{ l1 } -> l1)
-                    in
-                    ( Success
-                        { data | learningLanguageModel = updatedModel
-                        , displayedProjectDescriptions = updatedProjectDescriptions
-                        }
-                    , Cmd.batch
-                        [ Cmd.map LearningLanguageMsg updatedCmd
-                        , Cmd.map KnownLanguageMsg (LanguageSelect.setAvailableLanguages uniqueKnownContentCodes data.knownLanguageModel learningLanguageMsg)
-                        ]
-                    )
---                other ->
---                    let
---                        ( updatedModel, updatedCmd ) =
---                            LanguageSelect.update learningLanguageMsg data.learningLanguageModel
---                    in
---                    ( Success { data | learningLanguageModel = updatedModel }
---                    , Cmd.map LearningLanguageMsg updatedCmd
---                    )
+            case data.projectDescriptions of
+                Api.Loaded _ ->
+                    case learningLanguageMsg of
+                        LanguageSelect.UpdateLanguage _ ->
+                            updateKnownLanguagesFilter learningLanguageMsg data
+
+                        _ ->
+                            justPassthroughLearningLanguagesFilter learningLanguageMsg data
+
+                _ ->
+                    justPassthroughLearningLanguagesFilter learningLanguageMsg data
 
         ( CompletedProjectDescriptorsLoad result, Success data ) ->
             case result of
@@ -205,7 +231,6 @@ update msg model =
                         { data | projectDescriptions = Api.Loaded projectDescriptions
                         , displayedProjectDescriptions = projectDescriptions
                         }
---                    , Cmd.none
                     , Cmd.batch
                         [ Cmd.map KnownLanguageMsg (LanguageSelect.alwaysSetAvailableLanguages uniqueKnownContentCodes data.knownLanguageModel)
                         , Cmd.map LearningLanguageMsg (LanguageSelect.alwaysSetAvailableLanguages uniqueLearningContentCodes data.learningLanguageModel)

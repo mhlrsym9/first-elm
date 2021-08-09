@@ -1,4 +1,4 @@
-module LanguageSelect exposing (alwaysSetAvailableLanguages, ContentCode, fetchLanguages, getChosenLanguage, getContentCode, init, Languages, Model, Msg, setAvailableLanguages, toContentCode, update, view)
+module LanguageSelect exposing (alwaysSetAvailableLanguages, ContentCode, fetchLanguages, getChosenLanguage, getContentCode, init, Languages, Model, Msg(..), setAvailableLanguages, toContentCode, update, view)
 
 import Api
 import Dict exposing (Dict)
@@ -124,13 +124,9 @@ findLanguageFromContentCode dict cc =
         Nothing ->
             (emptyLanguage)
 
-setAvailableLanguages : List String -> Model -> Msg -> Cmd Msg
-setAvailableLanguages ccs { dictLanguages } msg =
-    case msg of
-        UpdateLanguages _ ->
-            Cmd.none
-        other ->
-            Task.perform UpdateLanguages (Task.succeed ((emptyLanguage) :: (List.map (findLanguageFromContentCode dictLanguages) ccs)))
+setAvailableLanguages : List String -> Model -> Cmd Msg
+setAvailableLanguages ccs { dictLanguages } =
+    Task.perform UpdateLanguages (Task.succeed ((emptyLanguage) :: (List.map (findLanguageFromContentCode dictLanguages) ccs)))
 
 alwaysSetAvailableLanguages : List String -> Model -> Cmd Msg
 alwaysSetAvailableLanguages ccs { dictLanguages } =
