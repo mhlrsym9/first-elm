@@ -1,5 +1,6 @@
 module Edit exposing (Model, Msg, init, update, view)
 
+import Api
 import Array exposing (Array)
 import Browser.Navigation as Navigation
 import Data.Slide as Slide
@@ -11,59 +12,43 @@ import Routes
 
 -- MODEL
 
-type alias ModelData =
+type alias Model =
     { slideIndex : Int
-    , slides : Array Slide.Model
+    , slides : Api.Status (Array Slide.Model)
     , knownContentCode : String
     , learningContentCode : String
     , projectName : String
     , navigationKey : Navigation.Key
     }
 
-type Model =
-    Loading
-    | Success ModelData
-
-init : Navigation.Key -> String -> String -> String -> Array Slide.Model -> (Model, Cmd Msg)
+init : Navigation.Key -> String -> String -> String -> Api.Status (Array Slide.Model) -> (Model, Cmd Msg)
 init navigationKey knownContentCode learningContentCode projectName slides =
-    ( Success
+    (
         { slideIndex = 0
-        , slides = slides
-        , knownContentCode = knownContentCode
-        , learningContentCode = learningContentCode
-        , projectName = projectName
-        , navigationKey = navigationKey
+            , slides = slides
+            , knownContentCode = knownContentCode
+            , learningContentCode = learningContentCode
+            , projectName = projectName
+            , navigationKey = navigationKey
         }
-    , Cmd.none
+        , Cmd.none
     )
 
 -- UPDATE
 
 type Msg =
-    GotSlides (Result Http.Error ModelData)
-    | Cancel
+    Cancel
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
-    case ( msg, model ) of
-        ( Cancel, Success modelData ) ->
-            ( model, Navigation.pushUrl modelData.navigationKey (Routes.routeToUrl Routes.Home) )
-
-        ( Cancel, _ ) ->
-            ( model, Cmd.none )
-
-        ( GotSlides _, _ ) ->
-            ( model, Cmd.none )
+    case msg of
+        Cancel ->
+            ( model, Navigation.pushUrl model.navigationKey (Routes.routeToUrl Routes.Home) )
 
 view : Model -> Html Msg
-view model =
-    case model of
-        Loading ->
-            div
-                [ ]
-                [ ]
-
-        Success { knownContentCode, learningContentCode, projectName } ->
+view { knownContentCode, learningContentCode, projectName, slides } =
+    case slides of
+        Api.Loaded _ ->
             div
                 [ class "edit-page" ]
                 [
@@ -94,5 +79,10 @@ view model =
                             [ text "Cancel" ]
                         ]
                 ]
+
+        _ ->
+            div
+                [ ]
+                [ ]
 
 

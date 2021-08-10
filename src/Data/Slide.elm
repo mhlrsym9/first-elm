@@ -1,7 +1,9 @@
-module Data.Slide exposing (Model)
+module Data.Slide exposing (encodeSlide, Model, slideDecoder)
 
-import Array exposing (Array)
-import Data.Question as Question exposing (Model)
+import Data.QuestionsArea as QuestionsArea
+import Json.Decode exposing (Decoder, field, map, string, succeed)
+import Json.Decode.Pipeline exposing (custom, required)
+import Json.Encode as Encode
 
 -- MODEL
 
@@ -10,10 +12,26 @@ type Text =
 
 type alias Model =
     { text : Text
-    , questionIndex : Int
-    , questions : Array Question.Model
+    , questionsArea : QuestionsArea.Model
     }
 
-text : Text -> String
-text (Text val) =
+slideDecoder : Decoder Model
+slideDecoder =
+    succeed Model
+        |> custom slideTextDecoder
+        |> required "questionsarea" QuestionsArea.questionsAreaDecoder
+
+encodeSlide : Model -> Encode.Value
+encodeSlide { text, questionsArea } =
+    Encode.object
+        [ ( "slide", Encode.string (textToString text) )
+        , ( "questionsArea", QuestionsArea.encodeQuestionsArea questionsArea )
+        ]
+
+slideTextDecoder : Decoder Text
+slideTextDecoder =
+    map Text (field "slide" string)
+
+textToString : Text -> String
+textToString (Text val) =
     val

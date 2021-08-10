@@ -3,14 +3,15 @@ module Open exposing (Model, Msg, init, update, view)
 import Api
 import Browser.Navigation as Navigation
 import Html exposing (Html, button, div, label, option, select, text)
-import Html.Attributes exposing (attribute, class, disabled, id, name, size, type_, value)
+import Html.Attributes exposing (attribute, class, disabled, id, name, size, value)
 import Html.Events exposing (onClick)
 import Html.Events.Extra exposing (onChange)
 import Http exposing (stringResolver)
-import Json.Decode exposing (Decoder, list, string, succeed)
+import Json.Decode exposing (Decoder, decodeString, list, string, succeed)
 import Json.Decode.Pipeline exposing (required)
+import Json.Encode as Encode
 import LanguageSelect
-import List.Extra exposing (unique)
+import List.Extra
 import Loading
 import Routes
 import Task exposing (Task)
@@ -24,8 +25,13 @@ type alias ProjectDescription =
     , project: String
     }
 
-type alias ProjectDescriptions =
-    List ProjectDescription
+encodeProjectDescription : ProjectDescription -> Encode.Value
+encodeProjectDescription { l1, l2, project } =
+    Encode.object
+        [ ( "l1", Encode.string l1 )
+        , ( "l2", Encode.string l2 )
+        , ( "project" , Encode.string project )
+        ]
 
 projectDescriptionDecoder : Decoder ProjectDescription
 projectDescriptionDecoder =
@@ -33,6 +39,9 @@ projectDescriptionDecoder =
         |> required "l1" string
         |> required "l2" string
         |> required "project" string
+
+type alias ProjectDescriptions =
+    List ProjectDescription
 
 projectDescriptionsDecoder : Decoder ProjectDescriptions
 projectDescriptionsDecoder =
@@ -43,7 +52,7 @@ type alias Data =
     , learningLanguageModel : LanguageSelect.Model
     , projectDescriptions : Api.Status ProjectDescriptions
     , displayedProjectDescriptions : ProjectDescriptions
-    , projectName : Maybe String
+    , chosenProject : Maybe String
     , navigationKey : Navigation.Key
     }
 
@@ -56,7 +65,7 @@ initialData navigationKey knownLanguageModel learningLanguageModel =
     , learningLanguageModel = learningLanguageModel
     , projectDescriptions = Api.Loading
     , displayedProjectDescriptions = [ ]
-    , projectName = Nothing
+    , chosenProject = Nothing
     , navigationKey = navigationKey
     }
 
@@ -114,7 +123,7 @@ getProjectDescriptions model =
             case projectDescriptions of
                 Api.Loaded a ->
                     a
-                other ->
+                _ ->
                     [ ]
 
 matchedProjectDescriptions : Api.Status ProjectDescriptions -> (String -> String -> ProjectDescription -> Bool) -> String -> String -> ProjectDescriptions
@@ -122,7 +131,7 @@ matchedProjectDescriptions projectDescriptions f kcc lcc =
     case projectDescriptions of
         Api.Loaded pds ->
             List.filter (f kcc lcc) pds
-        other ->
+        _ ->
             [ ]
 
 matchingProjectDescription : String -> String -> ProjectDescription -> Bool
@@ -255,21 +264,29 @@ update msg model =
             ( Success { data | projectDescriptions = updatedProjectDescriptions }, Cmd.none )
 
         ( UpdateProject project, Success data ) ->
-            ( Success { data | projectName = Just project }, Cmd.none )
+            ( Success { data | chosenProject = Just project }, Cmd.none )
 
-        ( Open, Success { projectName, navigationKey, knownLanguageModel, learningLanguageModel } ) ->
-            ( model
-            , Navigation.pushUrl
-                navigationKey
-                (Routes.routeToUrl
-                    (
-                        Routes.EditExisting
-                            (LanguageSelect.getContentCode knownLanguageModel)
-                            (LanguageSelect.getContentCode learningLanguageModel)
-                            projectName
-                    )
-                )
-            )
+        ( Open, Success { chosenProject, navigationKey } ) ->
+            case chosenProject of
+                Just chosenProjectStr ->
+                    let
+                        r = decodeString projectDescriptionDecoder chosenProjectStr
+                    in
+                    case r of
+                        Ok { l1, l2, project } ->
+                            ( model
+                            , Navigation.pushUrl
+                                navigationKey
+                                ( Routes.routeToUrl
+                                    ( Routes.EditExisting l1 l2 (Just project) )
+                                )
+                            )
+
+                        Err _ ->
+                            ( model, Cmd.none )
+
+                Nothing ->
+                    ( model, Cmd.none )
 
         ( Cancel, Success { navigationKey } ) ->
             ( model, Navigation.pushUrl navigationKey (Routes.routeToUrl Routes.Home) )
@@ -285,9 +302,9 @@ isOpenButtonDisabled projectName =
             True
 
 viewProjectDescription : ProjectDescription -> Html Msg
-viewProjectDescription { l1, l2, project } =
+viewProjectDescription ( { project } as pd ) =
     let
-        key = ( l1 ++ "/" ++ l2 ++ "/" ++ project )
+        key = Encode.encode 0 ( encodeProjectDescription pd )
     in
     option
         [ (attribute "key" key)
@@ -298,7 +315,7 @@ viewProjectDescription { l1, l2, project } =
 view : Model -> Html Msg
 view model =
     case model of
-        Success { knownLanguageModel, learningLanguageModel, projectName, projectDescriptions, displayedProjectDescriptions } ->
+        Success { knownLanguageModel, learningLanguageModel, chosenProject, projectDescriptions, displayedProjectDescriptions } ->
             case projectDescriptions of
                 Api.Loading ->
                     div [] []
@@ -332,7 +349,7 @@ view model =
                         , div
                             [ ]
                             [ button
-                                [ disabled (isOpenButtonDisabled projectName)
+                                [ disabled (isOpenButtonDisabled chosenProject)
                                 , onClick Open ]
                                 [ text "Open" ]
                             , button
