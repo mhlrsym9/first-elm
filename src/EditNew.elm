@@ -13,7 +13,7 @@ type alias Model =
 
 init : Navigation.Key -> String -> String -> String -> (Model, Cmd Msg)
 init key k l p =
-    Edit.init key k l p (Api.Loaded Array.empty)
+    Edit.init key k l p (Api.Loaded { slides = Array.empty } )
 
 -- UPDATE
 

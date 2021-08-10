@@ -66,6 +66,7 @@ type Msg
     | CreateMsg Create.Msg
     | OpenMsg Open.Msg
     | EditMsg Edit.Msg
+    | EditExistingMsg EditExisting.Msg
     | CompletedLanguageLoad (Result Http.Error LanguageSelect.Languages)
     | PassedSlowLoadThreshold
 
@@ -128,7 +129,7 @@ setNewPage maybeRoute model =
                             EditExisting.init model.navigationKey k l projectName
                     in
                     ( { model | page = Edit editModel }
-                    , Cmd.map EditMsg editCmd )
+                    , Cmd.map EditExistingMsg editCmd )
                 Nothing ->
                     ( model, Cmd.none )
 
@@ -188,6 +189,18 @@ update msg model =
 
         ( EditMsg _, _ ) ->
             Debug.todo "Handle EditMsg error case"
+
+        ( EditExistingMsg editExistingMsg, Edit editModel ) ->
+            let
+                ( updatedEditModel, editCmd ) =
+                    EditExisting.update editExistingMsg editModel
+            in
+            ( { model | page = Edit updatedEditModel }
+            , Cmd.map EditExistingMsg editCmd
+            )
+
+        ( EditExistingMsg _, _ ) ->
+            Debug.todo "Handle EditExistingMsg error case"
 
         ( Visit _, _ ) ->
             Debug.todo "Handle Visit"

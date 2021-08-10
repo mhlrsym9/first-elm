@@ -1,35 +1,33 @@
 module Edit exposing (Model, Msg, init, update, view)
 
 import Api
-import Array exposing (Array)
 import Browser.Navigation as Navigation
-import Data.Slide as Slide
+import Data.Project as Project
 import Html exposing (Html, button, div, h1, text)
 import Html.Attributes exposing (class)
 import Html.Events exposing (onClick)
-import Http
 import Routes
 
 -- MODEL
 
 type alias Model =
     { slideIndex : Int
-    , slides : Api.Status (Array Slide.Model)
+    , project : Api.Status Project.Model
     , knownContentCode : String
     , learningContentCode : String
     , projectName : String
     , navigationKey : Navigation.Key
     }
 
-init : Navigation.Key -> String -> String -> String -> Api.Status (Array Slide.Model) -> (Model, Cmd Msg)
-init navigationKey knownContentCode learningContentCode projectName slides =
+init : Navigation.Key -> String -> String -> String -> Api.Status Project.Model -> (Model, Cmd Msg)
+init navigationKey knownContentCode learningContentCode projectName project =
     (
         { slideIndex = 0
-            , slides = slides
-            , knownContentCode = knownContentCode
-            , learningContentCode = learningContentCode
-            , projectName = projectName
-            , navigationKey = navigationKey
+        , project = project
+        , knownContentCode = knownContentCode
+        , learningContentCode = learningContentCode
+        , projectName = projectName
+        , navigationKey = navigationKey
         }
         , Cmd.none
     )
@@ -46,8 +44,8 @@ update msg model =
             ( model, Navigation.pushUrl model.navigationKey (Routes.routeToUrl Routes.Home) )
 
 view : Model -> Html Msg
-view { knownContentCode, learningContentCode, projectName, slides } =
-    case slides of
+view { knownContentCode, learningContentCode, projectName, project } =
+    case project of
         Api.Loaded _ ->
             div
                 [ class "edit-page" ]

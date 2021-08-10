@@ -1,15 +1,14 @@
 module EditExisting exposing (..)
 
 import Api
-import Array exposing (Array)
 import Browser.Navigation as Navigation
-import Data.Slide as Slide exposing (slidesDecoder)
+import Data.Project as Project
 import Edit
 import Html exposing (Html)
 import Http exposing (stringResolver)
 import Loading
-import Data.Slide
 import Task exposing (Task)
+import Url.Builder as Builder
 
 -- MODEL
 
@@ -25,20 +24,23 @@ init key k l p =
     ( editModel
     , Cmd.batch
         [ Cmd.map EditMsg editMsg
-        , fetchProject
+        , (fetchProject k l p)
             |> Task.attempt CompletedProjectLoad
         , Task.perform (\_ -> PassedSlowLoadThreshold) Loading.slowThreshold
         ]
     )
 
-fetchProject : Task Http.Error (Array Slide.Model)
-fetchProject =
+fetchProject : String -> String -> String -> Task Http.Error Project.Model
+fetchProject k l p =
+    let
+        url = Builder.relative ["http://192.168.34.9:8080", "read", k, l, p] []
+    in
     Http.task
         { method = "GET"
         , headers = []
-        , url = "http://192.168.34.9:8080/catalog"
+        , url = url
         , body = Http.emptyBody
-        , resolver = stringResolver (Api.handleJsonResponse slidesDecoder)
+        , resolver = stringResolver (Api.handleJsonResponse Project.projectDecoder)
         , timeout = Nothing
         }
 
@@ -46,7 +48,7 @@ fetchProject =
 
 type Msg =
     PassedSlowLoadThreshold
-    | CompletedProjectLoad (Result Http.Error (Array Data.Slide.Model))
+    | CompletedProjectLoad (Result Http.Error Project.Model)
     | EditMsg Edit.Msg
 
 update : Msg -> Model -> (Model, Cmd Msg)
@@ -57,24 +59,25 @@ update msg model =
                 -- If any data is still Loading, change it to LoadingSlowly
                 -- so `view` knows to render a spinner.
                 updatedSlides =
-                    case model.slides of
+                    case model.project of
                         Api.Loading ->
                             Api.LoadingSlowly
 
                         other ->
                             other
             in
-            ( { model | slides = updatedSlides }
+            ( { model | project = updatedSlides }
             , Cmd.none )
 
         CompletedProjectLoad result ->
-            case result of
-                Ok slides ->
-                    ( { model | slides = Api.Loaded slides }
+            case Debug.log "decodedProject" result of
+--            case result of
+                Ok project ->
+                    ( { model | project = Api.Loaded project }
                     , Cmd.none
                     )
                 Err _ ->
-                    ( { model | slides = Api.Failed }
+                    ( { model | project = Api.Failed }
                     , Cmd.none
                     )
 

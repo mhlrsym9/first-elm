@@ -15,7 +15,7 @@ questionsAreaDecoder : Decoder Model
 questionsAreaDecoder =
     succeed Model
         |> required "questionIndex" int
-        |> required "questions " (array Question.questionDecoder)
+        |> required "questions" (array Question.questionDecoder)
 
 encodeQuestionsArea : Model -> Encode.Value
 encodeQuestionsArea { questionIndex, questions } =
