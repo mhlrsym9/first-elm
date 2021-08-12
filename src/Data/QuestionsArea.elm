@@ -1,4 +1,4 @@
-module Data.QuestionsArea exposing (encodeQuestionsArea, Model, questionsAreaDecoder)
+module Data.QuestionsArea exposing (encodeQuestionsArea, init, Model, questionsAreaDecoder)
 
 import Array exposing (Array)
 import Data.Question as Question
@@ -23,3 +23,9 @@ encodeQuestionsArea { questionIndex, questions } =
         [ ( "questionIndex", Encode.int questionIndex )
         , ( "questions", Encode.array Question.encodeQuestion questions )
         ]
+
+init : Model
+init =
+    { questionIndex = 0
+    , questions = Array.repeat 1 Question.init
+    }

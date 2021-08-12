@@ -1,4 +1,4 @@
-module Data.AnswersArea exposing (answersAreaDecoder, encodeAnswersArea, Model)
+module Data.AnswersArea exposing (answersAreaDecoder, encodeAnswersArea, init, Model)
 
 import Array exposing (Array)
 import Json.Decode exposing (array, Decoder, field, map, string, succeed)
@@ -48,3 +48,9 @@ encodeAnswers answers =
 answerToString : Answer -> Encode.Value
 answerToString (Answer val) =
     Encode.string val
+
+init : Model
+init =
+    { optRadio = OptRadio "0_0_0"
+    , answers = Array.repeat 1 (Answer "This is a sample answer")
+    }

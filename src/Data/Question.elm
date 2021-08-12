@@ -1,4 +1,4 @@
-module Data.Question exposing (encodeQuestion, Model, questionDecoder)
+module Data.Question exposing (encodeQuestion, init, Model, questionDecoder)
 
 import Data.AnswersArea as AnswersArea
 import Json.Decode exposing (Decoder, field, map, string, succeed)
@@ -35,3 +35,9 @@ encodeQuestion { text, answersArea } =
 textToString: Text -> String
 textToString (Text val) =
     val
+
+init : Model
+init =
+    { text = Text "This is a sample question"
+    , answersArea = AnswersArea.init
+    }

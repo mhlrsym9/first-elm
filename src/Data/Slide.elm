@@ -1,4 +1,4 @@
-module Data.Slide exposing (encodeSlide, Model, slideDecoder)
+module Data.Slide exposing (encodeSlide, init, Model, slideDecoder, textToString)
 
 import Data.QuestionsArea as QuestionsArea
 import Json.Decode exposing (Decoder, field, map, string, succeed)
@@ -35,3 +35,9 @@ slideTextDecoder =
 textToString : Text -> String
 textToString (Text val) =
     val
+
+init : Model
+init =
+    { text = Text "This is a test"
+    , questionsArea = QuestionsArea.init
+    }
