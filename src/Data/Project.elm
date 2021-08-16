@@ -1,4 +1,4 @@
-module Data.Project exposing (insertSlideBefore, projectDecoder, init, Model, Msg, update, view)
+module Data.Project exposing (encodeProject, insertSlideBefore, projectDecoder, init, Model, Msg, update, view)
 
 import Array exposing (Array)
 import Data.Slide as Slide
@@ -102,8 +102,6 @@ update msg ( { slideIndex, slides } as model ) =
 
                 Nothing ->
                     ( model, Cmd.none )
-
-
 
 -- VIEW
 

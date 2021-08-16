@@ -33,7 +33,7 @@ init key k l p =
 fetchProject : String -> String -> String -> Task Http.Error Project.Model
 fetchProject k l p =
     let
-        url = Builder.relative ["http://192.168.34.9:8080", "read", k, l, p] []
+        url = Builder.relative [Edit.urlPath, "read", k, l, p] []
     in
     Http.task
         { method = "GET"
@@ -58,26 +58,28 @@ update msg model =
             let
                 -- If any data is still Loading, change it to LoadingSlowly
                 -- so `view` knows to render a spinner.
-                updatedSlides =
+                updatedProjectModel =
                     case model.project of
-                        Api.Loading ->
+                        Edit.Clean Api.Loading ->
                             Api.LoadingSlowly
 
-                        other ->
-                            other
+                        Edit.Clean pm ->
+                            pm
+
+                        Edit.Dirty pm ->
+                            pm
             in
-            ( { model | project = updatedSlides }
+            ( { model | project = Edit.Clean updatedProjectModel }
             , Cmd.none )
 
         CompletedProjectLoad result ->
             case Debug.log "decodedProject" result of
---            case result of
                 Ok project ->
-                    ( { model | project = Api.Loaded project }
+                    ( { model | project = Edit.Clean (Api.Loaded project) }
                     , Cmd.none
                     )
                 Err _ ->
-                    ( { model | project = Api.Failed }
+                    ( { model | project = Edit.Clean Api.Failed }
                     , Cmd.none
                     )
 

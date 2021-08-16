@@ -28,7 +28,8 @@ encodeSlide : Model -> Encode.Value
 encodeSlide { slideText, questionsArea } =
     Encode.object
         [ ( "slide", Encode.string (textToString slideText) )
-        , ( "questionsArea", QuestionsArea.encodeQuestionsArea questionsArea )
+        , ( "display", Encode.string "initial")
+        , ( "questionsarea", QuestionsArea.encodeQuestionsArea questionsArea )
         ]
 
 slideTextDecoder : Decoder Text

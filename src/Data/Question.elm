@@ -28,8 +28,9 @@ questionTextDecoder =
 encodeQuestion : Model -> Encode.Value
 encodeQuestion { text, answersArea } =
     Encode.object
-        [ ( "question", Encode.string (textToString text) )
-        , ( "answersArea", AnswersArea.encodeAnswersArea answersArea )
+        [ ( "display", Encode.string "none" )
+        , ( "question", Encode.string (textToString text) )
+        , ( "answersarea", AnswersArea.encodeAnswersArea answersArea )
         ]
 
 textToString: Text -> String

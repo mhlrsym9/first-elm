@@ -1,7 +1,6 @@
 module EditNew exposing (Model, Msg, init, update, view)
 
 import Api
-import Array
 import Browser.Navigation as Navigation
 import Data.Project as Project
 import Edit
