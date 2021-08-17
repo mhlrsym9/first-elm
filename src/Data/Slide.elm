@@ -1,9 +1,9 @@
 module Data.Slide exposing (encodeSlide, establishIndexes, init, Model, Msg, slideDecoder, textToString, update, view)
 
 import Data.QuestionsArea as QuestionsArea
-import Html exposing (Html, button, div, text, textarea)
-import Html.Attributes exposing (class, disabled)
-import Html.Events exposing (onClick, onInput)
+import Html exposing (Html, div, text, textarea)
+import Html.Attributes exposing (class)
+import Html.Events exposing (onInput)
 import Json.Decode exposing (Decoder, field, map, string, succeed)
 import Json.Decode.Pipeline exposing (custom, hardcoded, required)
 import Json.Encode as Encode
