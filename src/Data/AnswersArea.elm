@@ -1,8 +1,8 @@
-module Data.AnswersArea exposing (answersAreaDecoder, encodeAnswersArea, init, Model)
+module Data.AnswersArea exposing (answersAreaDecoder, encodeAnswersArea, establishIndexes, init, Model)
 
 import Array exposing (Array)
 import Json.Decode exposing (array, Decoder, field, map, string, succeed)
-import Json.Decode.Pipeline exposing (custom, required)
+import Json.Decode.Pipeline exposing (custom, hardcoded, required)
 import Json.Encode as Encode
 
 type OptRadio =
@@ -12,13 +12,17 @@ type Answer =
     Answer String
 
 type alias Model =
-    { optRadio : OptRadio
+    { slideIndex : Int
+    , questionIndex : Int
+    , optRadio : OptRadio
     , answers : Array Answer
     }
 
 answersAreaDecoder : Decoder Model
 answersAreaDecoder =
     succeed Model
+        |> hardcoded 0
+        |> hardcoded 0
         |> custom optRadioDecoder
         |> required "answers" (array answerDecoder)
 
@@ -49,8 +53,21 @@ answerToString : Answer -> Encode.Value
 answerToString (Answer val) =
     Encode.string val
 
-init : Model
+init : (Model, Cmd msg)
 init =
-    { optRadio = OptRadio "0_0_0"
-    , answers = Array.repeat 1 (Answer "This is a sample answer")
+    (
+        { slideIndex = 0
+        , questionIndex = 0
+        , optRadio = OptRadio "0_0_0"
+        , answers = Array.repeat 1 (Answer "This is a sample answer")
+        }
+        , Cmd.none
+    )
+
+establishIndexes : Int -> Int -> Model -> Model
+establishIndexes slideIndex questionIndex ( { answers } as model ) =
+    {
+        model
+            | slideIndex = slideIndex
+            , questionIndex = questionIndex
     }

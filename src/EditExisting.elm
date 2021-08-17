@@ -15,16 +15,16 @@ import Url.Builder as Builder
 type alias Model =
     Edit.Model
 
-init : Navigation.Key -> String -> String -> String -> (Model, Cmd Msg)
-init key k l p =
+init : { key : Navigation.Key, kcc : String, lcc : String, pn : String }-> (Model, Cmd Msg)
+init { key, kcc, lcc, pn } =
     let
         ( editModel, editMsg ) =
-            Edit.init key k l p Api.Loading
+            Edit.init { key = key, kcc = kcc, lcc = lcc, pn = pn, model = Api.Loading }
     in
     ( editModel
     , Cmd.batch
         [ Cmd.map EditMsg editMsg
-        , (fetchProject k l p)
+        , (fetchProject kcc lcc pn)
             |> Task.attempt CompletedProjectLoad
         , Task.perform (\_ -> PassedSlowLoadThreshold) Loading.slowThreshold
         ]
@@ -75,7 +75,10 @@ update msg model =
         CompletedProjectLoad result ->
             case Debug.log "decodedProject" result of
                 Ok project ->
-                    ( { model | project = Edit.Clean (Api.Loaded project) }
+                    let
+                        updatedProject = Project.establishIndexes project
+                    in
+                    ( { model | project = Edit.Clean (Api.Loaded updatedProject) }
                     , Cmd.none
                     )
                 Err _ ->

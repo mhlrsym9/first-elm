@@ -1,4 +1,4 @@
-module Data.Project exposing (encodeProject, insertSlideBefore, projectDecoder, init, Model, Msg, update, view)
+module Data.Project exposing (encodeProject, establishIndexes, insertSlideBefore, projectDecoder, init, Model, Msg, update, view)
 
 import Array exposing (Array)
 import Data.Slide as Slide
@@ -23,9 +23,13 @@ encodeProject : Model -> Encode.Value
 encodeProject model =
     Encode.array Slide.encodeSlide model.slides
 
-init : Model
+init : (Model, Cmd Msg)
 init =
-    { slideIndex = 0, slides = Array.empty }
+    ( { slideIndex = 0, slides = Array.empty }, Cmd.none )
+
+establishIndexes : Model -> Model
+establishIndexes ( { slides } as model ) =
+    { model | slides = Array.indexedMap Slide.establishIndexes slides }
 
 -- UPDATE
 
@@ -36,26 +40,41 @@ type Msg =
     | InsertSlideBefore
     | SlideMsg Slide.Msg
 
-insertSlideAfter : Model -> Model
+createNewSlide : (Array Slide.Model, Cmd Msg)
+createNewSlide =
+    let
+        newSlideTuples = Array.repeat 1 Slide.init
+        newSlides = Array.map (\(slide, _) -> slide) newSlideTuples
+        commands = Array.toList (Array.map (\(_, slideCommands) -> Cmd.map SlideMsg slideCommands) newSlideTuples)
+    in
+    (newSlides, Cmd.batch commands)
+
+insertSlideAfter : Model -> (Model, Cmd Msg)
 insertSlideAfter ( { slideIndex, slides } as model ) =
     let
         slicePoint = slideIndex + 1
         beforeSlides = Array.slice 0 slicePoint slides
-        newSlides = Array.repeat 1 Slide.init
+        (newSlides, commands) = createNewSlide
         afterSlides = Array.slice slicePoint ( Array.length slides ) slides
     in
-    { model | slides = Array.append beforeSlides ( Array.append newSlides afterSlides )
-            , slideIndex = slicePoint
-    }
+    (
+        { model | slides = Array.append beforeSlides ( Array.append newSlides afterSlides )
+                , slideIndex = slicePoint
+        }
+        , commands
+    )
 
-insertSlideBefore : Model -> Model
+insertSlideBefore : Model -> (Model, Cmd Msg)
 insertSlideBefore ( { slideIndex, slides } as model ) =
     let
         beforeSlides = Array.slice 0 slideIndex slides
-        newSlides = Array.repeat 1 Slide.init
+        (newSlides, commands) = createNewSlide
         afterSlides = Array.slice slideIndex ( Array.length slides ) slides
     in
-    { model | slides = Array.append beforeSlides ( Array.append newSlides afterSlides ) }
+    (
+        { model | slides = Array.append beforeSlides ( Array.append newSlides afterSlides ) }
+        , commands
+    )
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg ( { slideIndex, slides } as model ) =
@@ -81,10 +100,10 @@ update msg ( { slideIndex, slides } as model ) =
             ( { model | slideIndex = updatedSlideIndex }, Cmd.none )
 
         InsertSlideAfter ->
-            ( insertSlideAfter model, Cmd.none )
+            insertSlideAfter model
 
         InsertSlideBefore ->
-            ( insertSlideBefore model, Cmd.none )
+            insertSlideBefore model
 
         SlideMsg slideMsg ->
             let

@@ -114,7 +114,7 @@ setNewPage maybeRoute model =
                 Just projectName ->
                     let
                         ( editModel, editCmd ) =
-                            EditNew.init model.navigationKey k l projectName
+                            EditNew.init { key = model.navigationKey, kcc = k, lcc = l, pn =  projectName }
                     in
                     ( { model | page = Edit editModel }
                     , Cmd.map EditMsg editCmd )
@@ -126,7 +126,7 @@ setNewPage maybeRoute model =
                 Just projectName ->
                     let
                         ( editModel, editCmd ) =
-                            EditExisting.init model.navigationKey k l projectName
+                            EditExisting.init { key = model.navigationKey, kcc = k, lcc = l, pn = projectName }
                     in
                     ( { model | page = Edit editModel }
                     , Cmd.map EditExistingMsg editCmd )

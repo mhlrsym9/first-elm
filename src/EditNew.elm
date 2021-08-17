@@ -11,9 +11,18 @@ import Html exposing (Html)
 type alias Model =
     Edit.Model
 
-init : Navigation.Key -> String -> String -> String -> (Model, Cmd Msg)
-init key k l p =
-    Edit.init key k l p ( Api.Loaded Project.init )
+init : { key : Navigation.Key, kcc : String, lcc : String, pn : String } -> (Model, Cmd Msg)
+init { key, kcc, lcc, pn } =
+    let
+        (projectModel, projectCommands) = Project.init
+        (editModel, editCommands) = Edit.init { key = key, kcc = kcc, lcc = lcc, pn = pn, model = Api.Loaded projectModel }
+    in
+    ( editModel
+    , Cmd.batch
+        [ Cmd.map Edit.ProjectMsg projectCommands
+        , editCommands
+        ]
+    )
 
 -- UPDATE
 

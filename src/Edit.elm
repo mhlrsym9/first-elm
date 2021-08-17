@@ -1,4 +1,4 @@
-module Edit exposing (Model, Modified(..), Msg, init, update, urlPath, view)
+module Edit exposing (getProjectModel, Model, Modified(..), Msg(..), init, update, urlPath, view)
 
 import Api
 import Browser.Navigation as Navigation
@@ -32,14 +32,14 @@ type alias Model =
 type alias SaveResult =
     { id : String }
 
-init : Navigation.Key -> String -> String -> String -> Api.Status Project.Model -> (Model, Cmd Msg)
-init navigationKey knownContentCode learningContentCode projectName projectModel =
+init : { key : Navigation.Key, kcc : String, lcc : String, pn : String, model : Api.Status Project.Model} -> (Model, Cmd Msg)
+init { key, kcc, lcc, pn, model } =
     (
-        { project = Clean projectModel
-        , knownContentCode = knownContentCode
-        , learningContentCode = learningContentCode
-        , projectName = projectName
-        , navigationKey = navigationKey
+        { project = Clean model
+        , knownContentCode = kcc
+        , learningContentCode = lcc
+        , projectName = pn
+        , navigationKey = key
         }
         , Cmd.none
     )
@@ -47,6 +47,25 @@ init navigationKey knownContentCode learningContentCode projectName projectModel
 urlPath : String
 urlPath =
     "http://192.168.34.9:8080"
+
+getProjectModel : Model -> Maybe Project.Model
+getProjectModel model =
+    case model.project of
+        Clean a ->
+            case a of
+                Api.Loaded b ->
+                    Just b
+                _ ->
+                    Nothing
+
+        Dirty a ->
+            case a of
+                Api.Loaded b ->
+                    Just b
+                _ ->
+                    Nothing
+
+
 
 -- UPDATE
 

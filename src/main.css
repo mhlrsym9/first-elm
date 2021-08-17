@@ -52,3 +52,8 @@ img {
 .edit-page-language-info {
   columns: 2 200px;
 }
+
+.edit-page-questions-table {
+  margin-left: auto;
+  margin-right: auto;
+}
