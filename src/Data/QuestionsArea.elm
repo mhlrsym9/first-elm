@@ -24,11 +24,23 @@ questionsAreaDecoder =
         |> hardcoded (Array.repeat 1 0)
         |> required "questions" (array Question.questionDecoder)
 
+encodeQuestionAtIndex : Int -> Array Question.Model -> Encode.Value
+encodeQuestionAtIndex index questions =
+    let
+        question = Array.get index questions
+    in
+    case question of
+        Just q ->
+            Question.encodeQuestion q
+
+        Nothing ->
+            Encode.null
+
 encodeQuestionsArea : Model -> Encode.Value
-encodeQuestionsArea { questionIndex, questions } =
+encodeQuestionsArea { questionIndex, questionPositions, questions } =
     Encode.object
         [ ( "questionIndex", Encode.int questionIndex )
-        , ( "questions", Encode.array Question.encodeQuestion questions )
+        , ( "questions", Encode.array (\qi -> encodeQuestionAtIndex qi questions) questionPositions )
         ]
 
 init : (Model, Cmd Msg)

@@ -49,10 +49,9 @@ createNewSlide =
     in
     (newSlides, Cmd.batch commands)
 
-insertSlideAfter : Model -> (Model, Cmd Msg)
-insertSlideAfter ( { slideIndex, slides } as model ) =
+insertSlideAtSlicePoint : Int -> Model -> (Model, Cmd Msg)
+insertSlideAtSlicePoint slicePoint ( { slides } as model ) =
     let
-        slicePoint = slideIndex + 1
         beforeSlides = Array.slice 0 slicePoint slides
         (newSlides, commands) = createNewSlide
         afterSlides = Array.slice slicePoint ( Array.length slides ) slides
@@ -64,17 +63,13 @@ insertSlideAfter ( { slideIndex, slides } as model ) =
         , commands
     )
 
+insertSlideAfter : Model -> (Model, Cmd Msg)
+insertSlideAfter ( { slideIndex } as model ) =
+    insertSlideAtSlicePoint (slideIndex + 1) model
+
 insertSlideBefore : Model -> (Model, Cmd Msg)
-insertSlideBefore ( { slideIndex, slides } as model ) =
-    let
-        beforeSlides = Array.slice 0 slideIndex slides
-        (newSlides, commands) = createNewSlide
-        afterSlides = Array.slice slideIndex ( Array.length slides ) slides
-    in
-    (
-        { model | slides = Array.append beforeSlides ( Array.append newSlides afterSlides ) }
-        , commands
-    )
+insertSlideBefore ( { slideIndex } as model ) =
+    insertSlideAtSlicePoint slideIndex model
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg ( { slideIndex, slides } as model ) =
