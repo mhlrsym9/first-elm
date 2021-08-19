@@ -51,7 +51,7 @@ init =
         , slideIndex = 0
         , questions = Dict.singleton 0 questionModel
         }
-        , Cmd.map QuestionMsg questionCommands
+        , Cmd.map (QuestionMsg 0) questionCommands
     )
 
 establishIndexes : Int -> Model -> Model
@@ -74,7 +74,7 @@ type Msg =
     Add
     | Delete Int
     | Move Int Direction
-    | QuestionMsg Question.Msg
+    | QuestionMsg Int Question.Msg
 
 shiftIndexes : Int -> Int -> Model -> (Model, Cmd Msg)
 shiftIndexes atIndex otherIndex ( { questions } as model ) =
@@ -127,6 +127,27 @@ updateIndexes index shiftBy finalIndex ( { questions } as model ) =
         Nothing ->
             ( model, Cmd.none )
 
+updateQuestion : Int -> Question.Msg -> Model -> (Model, Cmd Msg)
+updateQuestion index questionMsg ( { questions } as model ) =
+    let
+        maybeQuestion = Dict.get index questions
+        (updatedModel, commands) =
+            case maybeQuestion of
+                Just question ->
+                    let
+                        (updatedQuestion, questionCommands) =
+                            Question.update questionMsg question
+                    in
+                    ( { model | questions = Dict.insert index updatedQuestion questions }
+                    , Cmd.map (QuestionMsg index) questionCommands
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
+    in
+        ( updatedModel, commands )
+
+
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg ( { slideIndex, questions } as model ) =
     case msg of
@@ -137,32 +158,14 @@ update msg ( { slideIndex, questions } as model ) =
                     Question.init { questionIndex = position, slideIndex = slideIndex }
             in
             ( { model | questions = Dict.insert (Dict.size questions) questionModel questions }
-            , Cmd.map QuestionMsg questionCommands
+            , Cmd.map (QuestionMsg position) questionCommands
             )
 
         Delete _ ->
             ( model, Cmd.none )
 
-        QuestionMsg questionMsg ->
-            case questionMsg of
-                Question.Update index _ ->
-                    let
-                        maybeQuestion = Dict.get index questions
-                        (updatedModel, commands) =
-                            case maybeQuestion of
-                                Just question ->
-                                    let
-                                        (updatedQuestion, questionCommands) =
-                                            Question.update questionMsg question
-                                    in
-                                    ( { model | questions = Dict.insert index updatedQuestion questions }
-                                    , Cmd.map QuestionMsg questionCommands
-                                    )
-
-                                Nothing ->
-                                    ( model, Cmd.none )
-                    in
-                        ( updatedModel, commands )
+        QuestionMsg index questionMsg ->
+            updateQuestion index questionMsg model
 
         Move index Up ->
             shiftIndexes index (index - 1) model
@@ -232,13 +235,6 @@ viewDeleteButton index numberQuestions =
         ]
         [ text "Delete This Question" ]
 
-viewAnswers : Question.Model -> Html Msg
-viewAnswers _ =
-    button
-        [ ]
-        [ text "View Answers" ]
-
-
 viewQuestionTableRowEntry : Int -> Int -> Question.Model -> List (Html Msg) -> List (Html Msg)
 viewQuestionTableRowEntry numberQuestions index question l =
     let
@@ -249,10 +245,9 @@ viewQuestionTableRowEntry numberQuestions index question l =
                 , viewMoveQuestionUpButton index
                 , viewMoveQuestionDownButton index numberQuestions
                 , viewMoveQuestionBottomButton index numberQuestions
-                , Question.view question
-                    |> Html.map QuestionMsg
                 , viewDeleteButton index numberQuestions
-                , viewAnswers question
+                , Question.view question
+                    |> Html.map (QuestionMsg index)
                 ]
     in
     List.append l (List.singleton entry)

@@ -13,12 +13,24 @@ import Json.Encode as Encode
 type Text =
     Text String
 
+type Visibility =
+    Hidden AnswersArea.Model
+    | Visible AnswersArea.Model
+
 type alias Model =
     { questionIndex : Int
     , slideIndex : Int
     , questionText : Text
-    , answersArea : AnswersArea.Model
+    , answersArea : Visibility
     }
+
+questionTextDecoder : Decoder Text
+questionTextDecoder =
+    map Text (field "question" string)
+
+answersAreaDecoder : Decoder Visibility
+answersAreaDecoder =
+    map Hidden (field "answersarea" AnswersArea.answersAreaDecoder)
 
 questionDecoder : Decoder Model
 questionDecoder =
@@ -26,18 +38,27 @@ questionDecoder =
         |> hardcoded 0
         |> hardcoded 0
         |> custom questionTextDecoder
-        |> required "answersarea" AnswersArea.answersAreaDecoder
+        |> custom answersAreaDecoder
 
-questionTextDecoder : Decoder Text
-questionTextDecoder =
-    map Text (field "question" string)
+extractAnswersAreaModel : Model -> AnswersArea.Model
+extractAnswersAreaModel { answersArea } =
+    case answersArea of
+        Hidden m ->
+            m
+
+        Visible m ->
+            m
+
+encodeAnswersArea : Model -> Encode.Value
+encodeAnswersArea model =
+    AnswersArea.encodeAnswersArea (extractAnswersAreaModel model)
 
 encodeQuestion : Model -> Encode.Value
-encodeQuestion { questionText, answersArea } =
+encodeQuestion ( { questionText } as model ) =
     Encode.object
         [ ( "display", Encode.string "none" )
         , ( "question", Encode.string (textToString questionText) )
-        , ( "answersarea", AnswersArea.encodeAnswersArea answersArea )
+        , ( "answersarea", encodeAnswersArea model)
         ]
 
 textToString: Text -> String
@@ -54,40 +75,102 @@ init { questionIndex, slideIndex } =
         { questionIndex = questionIndex
         , slideIndex = slideIndex
         , questionText = Text "This is a sample question"
-        , answersArea = answersAreaModel
+        , answersArea = Hidden answersAreaModel
         }
         , answersAreaCommands
     )
 
+establishAnswersAreaIndexes : Int -> Int -> Model -> Visibility
+establishAnswersAreaIndexes slideIndex questionIndex ( { answersArea } as model ) =
+    case answersArea of
+        Hidden m ->
+            Hidden (AnswersArea.establishIndexes slideIndex questionIndex m)
+
+        Visible m ->
+            Visible (AnswersArea.establishIndexes slideIndex questionIndex m)
+
 establishIndexes : Int -> Int -> Model -> Model
-establishIndexes slideIndex questionIndex ( { answersArea } as model ) =
+establishIndexes slideIndex questionIndex model =
     {
         model
             | slideIndex = slideIndex
             , questionIndex = questionIndex
-            , answersArea = AnswersArea.establishIndexes slideIndex questionIndex answersArea
+            , answersArea = establishAnswersAreaIndexes slideIndex questionIndex model
     }
 
 -- UPDATE
 
 type Msg =
-    Update Int String
+    Update String
+    | UpdateVisibility Visibility
+    | AnswersAreaMsg AnswersArea.Msg
 
 update : Msg -> Model -> (Model, Cmd Msg)
-update msg model =
+update msg ( { questionIndex, answersArea } as model ) =
     case msg of
-        Update _ s ->
+        Update s ->
             ( { model | questionText = Text s }
             , Cmd.none
             )
 
+        UpdateVisibility updatedAnswersArea ->
+            ( { model | answersArea = updatedAnswersArea }
+            , Cmd.none
+            )
+
+        AnswersAreaMsg answersAreaMsg ->
+            case answersArea of
+                Hidden _ ->
+                    ( model, Cmd.none )
+
+                Visible m ->
+                    let
+                        (updatedAnswersAreaModel, answersAreaCommands) =
+                            AnswersArea.update answersAreaMsg m
+                    in
+                    ( { model | answersArea = Visible updatedAnswersAreaModel }
+                    , Cmd.map AnswersAreaMsg answersAreaCommands
+                    )
+
 -- VIEW
 
-view : Model -> Html Msg
-view { questionIndex, questionText } =
+viewQuestion : Model -> Html Msg
+viewQuestion { questionText } =
     input
-        [ onInput (Update questionIndex)
+        [ onInput Update
         , type_ "text"
         , value (textToString questionText)
         ]
         [ ]
+
+viewAnswersButton : Model -> Html Msg
+viewAnswersButton ( { answersArea } ) =
+    case answersArea of
+        Hidden m ->
+            button
+                [ onClick ( UpdateVisibility (Visible m) ) ]
+                [ text "View Answers" ]
+
+        Visible m ->
+            button
+                [ onClick ( UpdateVisibility (Hidden m) ) ]
+                [ text "Hide Answers" ]
+
+viewAnswers : Model -> Html Msg
+viewAnswers ( { questionIndex, answersArea } ) =
+    case answersArea of
+        Hidden _ ->
+            div [ ] [ ]
+
+        Visible m ->
+            AnswersArea.view m
+                |> Html.map AnswersAreaMsg
+
+view : Model -> Html Msg
+view model =
+    div
+        [ class "edit-page-question" ]
+        [ viewQuestion model
+        , viewAnswersButton model
+        , viewAnswers model
+        ]
