@@ -65,8 +65,6 @@ getProjectModel model =
                 _ ->
                     Nothing
 
-
-
 -- UPDATE
 
 type Msg =

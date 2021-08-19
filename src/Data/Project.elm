@@ -2,9 +2,9 @@ module Data.Project exposing (encodeProject, establishIndexes, insertSlideBefore
 
 import Array exposing (Array)
 import Data.Slide as Slide
-import Html exposing (Html, button, div, text, textarea)
+import Html exposing (Html, button, div, text)
 import Html.Attributes exposing (class, disabled)
-import Html.Events exposing (onClick, onInput)
+import Html.Events exposing (onClick)
 import Json.Decode exposing (array, Decoder, succeed)
 import Json.Decode.Pipeline exposing (hardcoded, required)
 import Json.Encode as Encode

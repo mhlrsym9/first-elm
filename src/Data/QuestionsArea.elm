@@ -1,5 +1,6 @@
 module Data.QuestionsArea exposing (encodeQuestionsArea, establishIndexes, init, Model, Msg, questionsAreaDecoder, update, view)
 
+import Data.ProjectHelpers as ProjectHelpers
 import Data.Question as Question
 import Dict exposing (Dict)
 import Html exposing (button, div, h2, Html, table, text, tr)
@@ -76,57 +77,6 @@ type Msg =
     | Move Int Direction
     | QuestionMsg Int Question.Msg
 
-shiftIndexes : Int -> Int -> Model -> (Model, Cmd Msg)
-shiftIndexes atIndex otherIndex ( { questions } as model ) =
-    let
-        maybeOther = Dict.get otherIndex questions
-    in
-    case maybeOther of
-        Just other ->
-            let
-                maybeAt = Dict.get atIndex questions
-            in
-            case maybeAt of
-                Just at ->
-                    (
-                        { model
-                            | questions =
-                                questions
-                                    |> Dict.insert otherIndex at
-                                    |> Dict.insert atIndex other
-                        }
-                        , Cmd.none
-                    )
-
-                Nothing ->
-                    ( model, Cmd.none )
-
-        Nothing ->
-            ( model, Cmd.none )
-
-updateIndexes : Int -> Int -> Int -> Model -> (Model, Cmd Msg)
-updateIndexes index shiftBy finalIndex ( { questions } as model ) =
-    let
-        maybeAt = Dict.get index questions
-    in
-    case maybeAt of
-        Just at ->
-            (
-                { model
-                    | questions =
-                        questions
-                            |> Dict.remove index
-                            |> Dict.toList
-                            |> List.map (\(i, q) -> ( (i + shiftBy), q ))
-                            |> Dict.fromList
-                            |> Dict.insert finalIndex at
-                }
-                , Cmd.none
-            )
-
-        Nothing ->
-            ( model, Cmd.none )
-
 updateQuestion : Int -> Question.Msg -> Model -> (Model, Cmd Msg)
 updateQuestion index questionMsg ( { questions } as model ) =
     let
@@ -146,7 +96,6 @@ updateQuestion index questionMsg ( { questions } as model ) =
                     ( model, Cmd.none )
     in
         ( updatedModel, commands )
-
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg ( { slideIndex, questions } as model ) =
@@ -168,16 +117,36 @@ update msg ( { slideIndex, questions } as model ) =
             updateQuestion index questionMsg model
 
         Move index Up ->
-            shiftIndexes index (index - 1) model
+            let
+                updatedQuestions = ProjectHelpers.shiftIndexes index (index - 1) questions
+            in
+            ( { model | questions = updatedQuestions }
+            , Cmd.none
+            )
 
         Move index Down ->
-            shiftIndexes index (index + 1) model
+            let
+                updatedQuestions = ProjectHelpers.shiftIndexes index (index + 1) questions
+            in
+            ( { model | questions = updatedQuestions }
+            , Cmd.none
+            )
 
         Move index Top ->
-            updateIndexes index 1 0 model
+            let
+                updatedQuestions = ProjectHelpers.updateIndexes index 1 0 questions
+            in
+            ( { model | questions = updatedQuestions }
+            , Cmd.none
+            )
 
         Move index Bottom ->
-            updateIndexes index -1 ((Dict.size questions) - 1) model
+            let
+                updatedQuestions = ProjectHelpers.updateIndexes index -1 ((Dict.size questions) - 1) questions
+            in
+            ( { model | questions = updatedQuestions }
+            , Cmd.none
+            )
 
 -- VIEW
 

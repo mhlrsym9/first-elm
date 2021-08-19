@@ -1,11 +1,11 @@
 module Data.Question exposing (encodeQuestion, establishIndexes, init, Model, Msg(..), questionDecoder, update, view)
 
 import Data.AnswersArea as AnswersArea
-import Html exposing (Html, button, div, input, text, textarea, tr)
-import Html.Attributes exposing (class, disabled, type_, value)
+import Html exposing (Html, button, div, input, text)
+import Html.Attributes exposing (class, type_, value)
 import Html.Events exposing (onClick, onInput)
 import Json.Decode exposing (Decoder, field, map, string, succeed)
-import Json.Decode.Pipeline exposing (custom, hardcoded, required)
+import Json.Decode.Pipeline exposing (custom, hardcoded)
 import Json.Encode as Encode
 
 -- MODEL
@@ -81,7 +81,7 @@ init { questionIndex, slideIndex } =
     )
 
 establishAnswersAreaIndexes : Int -> Int -> Model -> Visibility
-establishAnswersAreaIndexes slideIndex questionIndex ( { answersArea } as model ) =
+establishAnswersAreaIndexes slideIndex questionIndex ( { answersArea } ) =
     case answersArea of
         Hidden m ->
             Hidden (AnswersArea.establishIndexes slideIndex questionIndex m)
