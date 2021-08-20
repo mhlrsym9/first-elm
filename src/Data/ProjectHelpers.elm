@@ -2,6 +2,12 @@ module Data.ProjectHelpers exposing (..)
 
 import Dict exposing (Dict)
 
+type Direction =
+    Up
+    | Down
+    | Top
+    | Bottom
+
 type IndexAdjustment =
     Increment
     | Decrement

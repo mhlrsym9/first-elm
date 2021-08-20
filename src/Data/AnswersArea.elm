@@ -89,16 +89,10 @@ establishIndexes slideIndex questionIndex ( { answers } as model ) =
 
 -- UPDATE
 
-type Direction =
-    Up
-    | Down
-    | Top
-    | Bottom
-
 type Msg =
     Add
     | Delete Int
-    | Move Int Direction
+    | Move Int ProjectHelpers.Direction
     | Update Int String
 
 update : Msg -> Model -> (Model, Cmd Msg)
@@ -114,7 +108,7 @@ update msg ( { answers } as model ) =
             , Cmd.none
             )
 
-        Move index Up ->
+        Move index ProjectHelpers.Up ->
             let
                 updatedAnswers = ProjectHelpers.flipAdjacentEntries index ProjectHelpers.Decrement answers
             in
@@ -122,7 +116,7 @@ update msg ( { answers } as model ) =
             , Cmd.none
             )
 
-        Move index Down ->
+        Move index ProjectHelpers.Down ->
             let
                 updatedAnswers = ProjectHelpers.flipAdjacentEntries index ProjectHelpers.Increment answers
             in
@@ -130,7 +124,7 @@ update msg ( { answers } as model ) =
             , Cmd.none
             )
 
-        Move index Top ->
+        Move index ProjectHelpers.Top ->
             let
                 updatedAnswers = ProjectHelpers.moveEntry index ProjectHelpers.Increment 0 answers
             in
@@ -138,7 +132,7 @@ update msg ( { answers } as model ) =
             , Cmd.none
             )
 
-        Move index Bottom ->
+        Move index ProjectHelpers.Bottom ->
             let
                 updatedAnswers = ProjectHelpers.moveEntry index ProjectHelpers.Decrement ((Dict.size answers) - 1) answers
             in
@@ -170,7 +164,7 @@ viewActionButtons =
 viewMoveAnswerTopButton : Int -> Html Msg
 viewMoveAnswerTopButton index =
     button
-        [ onClick (Move index Top)
+        [ onClick (Move index ProjectHelpers.Top)
         , disabled (0 == index)
         ]
         [ text "Move Answer to Top" ]
@@ -178,7 +172,7 @@ viewMoveAnswerTopButton index =
 viewMoveAnswerUpButton : Int -> Html Msg
 viewMoveAnswerUpButton index =
     button
-        [ onClick (Move index Up)
+        [ onClick (Move index ProjectHelpers.Up)
         , disabled (0 == index)
         ]
         [ text "Move Answer Up" ]
@@ -186,7 +180,7 @@ viewMoveAnswerUpButton index =
 viewMoveAnswerDownButton : Int -> Int -> Html Msg
 viewMoveAnswerDownButton index numberAnswers =
     button
-        [ onClick (Move index Down)
+        [ onClick (Move index ProjectHelpers.Down)
         , disabled ( index == (numberAnswers - 1) )
         ]
         [ text "Move Answer Down" ]
@@ -194,7 +188,7 @@ viewMoveAnswerDownButton index numberAnswers =
 viewMoveAnswerBottomButton : Int -> Int -> Html Msg
 viewMoveAnswerBottomButton index numberAnswers =
     button
-        [ onClick (Move index Bottom)
+        [ onClick (Move index ProjectHelpers.Bottom)
         , disabled ( index == (numberAnswers - 1) )
         ]
         [ text "Move Answer to Bottom" ]

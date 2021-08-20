@@ -1,35 +1,48 @@
 module Data.Project exposing (encodeProject, establishIndexes, insertSlideBefore, projectDecoder, init, Model, Msg, update, view)
 
 import Array exposing (Array)
+import Data.ProjectHelpers as ProjectHelpers
 import Data.Slide as Slide
+import Dict exposing (Dict)
 import Html exposing (Html, button, div, text)
 import Html.Attributes exposing (class, disabled)
 import Html.Events exposing (onClick)
 import Json.Decode exposing (array, Decoder, succeed)
+import Json.Decode.Extra exposing (indexedList)
 import Json.Decode.Pipeline exposing (hardcoded, required)
 import Json.Encode as Encode
 
 type alias Model =
     { slideIndex : Int
-    , slides : Array Slide.Model }
+    , slides : Dict Int Slide.Model }
+
+slideDecoder : Int -> Decoder (Int, Slide.Model)
+slideDecoder index =
+    Slide.slideDecoder
+        |> Json.Decode.map (\s -> (index, s))
+
+slidesDecoder : Decoder (Dict Int Slide.Model)
+slidesDecoder =
+    (indexedList slideDecoder)
+        |> Json.Decode.map (\l -> Dict.fromList l)
 
 projectDecoder : Decoder Model
 projectDecoder =
     succeed Model
         |> hardcoded 0
-        |> required "slides" (array Slide.slideDecoder)
+        |> required "slides" slidesDecoder
 
 encodeProject : Model -> Encode.Value
-encodeProject model =
-    Encode.array Slide.encodeSlide model.slides
+encodeProject { slides } =
+    slides |> Dict.values |> Encode.list Slide.encodeSlide
 
 init : (Model, Cmd Msg)
 init =
-    ( { slideIndex = 0, slides = Array.empty }, Cmd.none )
+    ( { slideIndex = 0, slides = Dict.empty }, Cmd.none )
 
 establishIndexes : Model -> Model
 establishIndexes ( { slides } as model ) =
-    { model | slides = Array.indexedMap Slide.establishIndexes slides }
+    { model | slides = Dict.map (\i s -> Slide.establishIndexes i s) slides }
 
 -- UPDATE
 
@@ -40,24 +53,23 @@ type Msg =
     | InsertSlideBefore
     | SlideMsg Slide.Msg
 
-createNewSlide : (Array Slide.Model, Cmd Msg)
-createNewSlide =
+createNewSlide : Int -> (Dict Int Slide.Model, Cmd Msg)
+createNewSlide index =
     let
-        newSlideTuples = Array.repeat 1 Slide.init
-        newSlides = Array.map (\(slide, _) -> slide) newSlideTuples
-        commands = Array.toList (Array.map (\(_, slideCommands) -> Cmd.map SlideMsg slideCommands) newSlideTuples)
+        (newSlide, slideCommands) =
+            Slide.init
+        updatedSlide = Slide.establishIndexes index newSlide
     in
-    (newSlides, Cmd.batch commands)
+    (Dict.singleton index updatedSlide, Cmd.map SlideMsg slideCommands)
 
 insertSlideAtSlicePoint : Int -> Model -> (Model, Cmd Msg)
 insertSlideAtSlicePoint slicePoint ( { slides } as model ) =
     let
-        beforeSlides = Array.slice 0 slicePoint slides
-        (newSlides, commands) = createNewSlide
-        afterSlides = Array.slice slicePoint ( Array.length slides ) slides
+        (beforeSlides, afterSlides) = Dict.partition (\i _ -> (i < slicePoint)) slides
+        (newSlides, commands) = createNewSlide slicePoint
     in
     (
-        { model | slides = Array.append beforeSlides ( Array.append newSlides afterSlides )
+        { model | slides = Dict.union beforeSlides ( Dict.union newSlides afterSlides )
                 , slideIndex = slicePoint
         }
         , commands
@@ -81,11 +93,9 @@ update msg ( { slideIndex, slides } as model ) =
                         0
                     else
                         slideIndex - 1
-                beforeSlides = Array.slice 0 slideIndex slides
-                afterSlides = Array.slice (slideIndex + 1) ( Array.length slides ) slides
             in
             (
-                { model | slides = Array.append beforeSlides afterSlides
+                { model | slides = ProjectHelpers.deleteEntry slideIndex slides
                         , slideIndex = updatedSlideIndex
                 }
                 , Cmd.none
@@ -102,7 +112,7 @@ update msg ( { slideIndex, slides } as model ) =
 
         SlideMsg slideMsg ->
             let
-                maybeSlide = Array.get slideIndex slides
+                maybeSlide = Dict.get slideIndex slides
             in
             case maybeSlide of
                 Just slide ->
@@ -110,7 +120,7 @@ update msg ( { slideIndex, slides } as model ) =
                         (updatedSlide, updatedSlideMsg) =
                             Slide.update slideMsg slide
                     in
-                    ( { model | slides = Array.set slideIndex updatedSlide slides }
+                    ( { model | slides = Dict.insert slideIndex updatedSlide slides }
                     , Cmd.map SlideMsg updatedSlideMsg
                     )
 
@@ -122,7 +132,7 @@ update msg ( { slideIndex, slides } as model ) =
 viewFirstSlideButton : Model -> Html Msg
 viewFirstSlideButton { slideIndex, slides } =
     let
-        numberSlides = Array.length slides
+        numberSlides = Dict.size slides
     in
     button
         [ class "slide-button"
@@ -134,7 +144,7 @@ viewFirstSlideButton { slideIndex, slides } =
 viewPreviousSlideButton : Model -> Html Msg
 viewPreviousSlideButton { slideIndex, slides } =
     let
-        numberSlides = Array.length slides
+        numberSlides = Dict.size slides
     in
     button
         [ class "slide-button"
@@ -146,7 +156,7 @@ viewPreviousSlideButton { slideIndex, slides } =
 viewNextSlideButton : Model -> Html Msg
 viewNextSlideButton { slideIndex, slides } =
     let
-        numberSlides = Array.length slides
+        numberSlides = Dict.size slides
     in
     button
         [ class "slide-button"
@@ -158,7 +168,7 @@ viewNextSlideButton { slideIndex, slides } =
 viewLastSlideButton : Model -> Html Msg
 viewLastSlideButton { slideIndex, slides } =
     let
-        numberSlides = Array.length slides
+        numberSlides = Dict.size slides
     in
     button
         [ class "slide-button"
@@ -170,7 +180,7 @@ viewLastSlideButton { slideIndex, slides } =
 viewSlideInfoRow : Model -> Html Msg
 viewSlideInfoRow ( { slideIndex, slides } as model ) =
     let
-        numberSlides = Array.length slides
+        numberSlides = Dict.size slides
     in
     div
         [ class "edit-page-slide-info-row" ]
@@ -217,7 +227,7 @@ viewDeleteSlideActionRow { slides } =
         [
             button
                 [ class "slide-button"
-                , disabled ( 1 == Array.length slides )
+                , disabled ( 1 == Dict.size slides )
                 , onClick DeleteSlide
                 ]
                 [ text "Delete This Slide"]
@@ -240,7 +250,7 @@ viewCurrentSlide ( { slideIndex, slides } as model ) =
         [ viewSlideInfoRow model
         , viewInsertSlideActionRow
         , viewDeleteSlideActionRow model
-        , viewSlide (Array.get slideIndex slides)
+        , viewSlide (Dict.get slideIndex slides)
         ]
 
 view : Model -> Html Msg
