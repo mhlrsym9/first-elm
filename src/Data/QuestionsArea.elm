@@ -110,8 +110,10 @@ update msg ( { slideIndex, questions } as model ) =
             , Cmd.map (QuestionMsg position) questionCommands
             )
 
-        Delete _ ->
-            ( model, Cmd.none )
+        Delete index ->
+            ( { model | questions = ProjectHelpers.deleteEntry index questions }
+            , Cmd.none
+            )
 
         QuestionMsg index questionMsg ->
             updateQuestion index questionMsg model

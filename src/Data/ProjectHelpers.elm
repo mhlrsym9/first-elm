@@ -39,22 +39,22 @@ flipAdjacentEntries atIndex shiftBy answers =
             answers
 
 updateIndexes : IndexAdjustment -> Dict Int b -> Dict Int b
-updateIndexes shiftBy answers =
-    answers
+updateIndexes shiftBy theDict =
+    theDict
         |> Dict.toList
         |> List.map (\(i, q) -> ( (adjustIndex shiftBy i), q ) )
         |> Dict.fromList
 
 moveEntry : Int -> IndexAdjustment -> Int -> Dict Int b -> Dict Int b
-moveEntry index shiftBy finalIndex answers =
+moveEntry index shiftBy finalIndex theDict =
     let
-        maybeAt = Dict.get index answers
+        maybeAt = Dict.get index theDict
     in
     case maybeAt of
         Just at ->
             let
                 (beforeIndex, afterIndex) =
-                    answers
+                    theDict
                         |> Dict.remove index
                         |> Dict.partition (\i a -> (i < index))
 
@@ -79,5 +79,14 @@ moveEntry index shiftBy finalIndex answers =
                 |> Dict.insert finalIndex at
 
         Nothing ->
-            answers
+            theDict
 
+deleteEntry : Int -> Dict Int b -> Dict Int b
+deleteEntry index theDict =
+    let
+        (keepSameIndex, decrementIndex) =
+            theDict
+                |> Dict.remove index
+                |> Dict.partition (\i _ -> (i < index))
+    in
+    Dict.union keepSameIndex (updateIndexes Decrement decrementIndex)

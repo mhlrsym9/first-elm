@@ -110,14 +110,7 @@ update msg ( { answers } as model ) =
             )
 
         Delete index ->
-            let
-                (keepSameIndex, decrementIndex) =
-                    answers
-                        |> Dict.remove index
-                        |> Dict.partition (\i _ -> (i < index))
-                updatedAnswers = Dict.union keepSameIndex (ProjectHelpers.updateIndexes ProjectHelpers.Decrement decrementIndex)
-            in
-            ( { model | answers = updatedAnswers }
+            ( { model | answers = ProjectHelpers.deleteEntry index answers }
             , Cmd.none
             )
 
@@ -136,7 +129,6 @@ update msg ( { answers } as model ) =
             ( { model | answers = updatedAnswers }
             , Cmd.none
             )
-
 
         Move index Top ->
             let
