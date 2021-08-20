@@ -118,7 +118,7 @@ update msg ( { slideIndex, questions } as model ) =
 
         Move index Up ->
             let
-                updatedQuestions = ProjectHelpers.shiftIndexes index (index - 1) questions
+                updatedQuestions = ProjectHelpers.flipAdjacentEntries index ProjectHelpers.Decrement questions
             in
             ( { model | questions = updatedQuestions }
             , Cmd.none
@@ -126,7 +126,7 @@ update msg ( { slideIndex, questions } as model ) =
 
         Move index Down ->
             let
-                updatedQuestions = ProjectHelpers.shiftIndexes index (index + 1) questions
+                updatedQuestions = ProjectHelpers.flipAdjacentEntries index ProjectHelpers.Increment questions
             in
             ( { model | questions = updatedQuestions }
             , Cmd.none
@@ -134,7 +134,7 @@ update msg ( { slideIndex, questions } as model ) =
 
         Move index Top ->
             let
-                updatedQuestions = ProjectHelpers.updateIndexes index 1 0 questions
+                updatedQuestions = ProjectHelpers.moveEntry index ProjectHelpers.Increment 0 questions
             in
             ( { model | questions = updatedQuestions }
             , Cmd.none
@@ -142,7 +142,7 @@ update msg ( { slideIndex, questions } as model ) =
 
         Move index Bottom ->
             let
-                updatedQuestions = ProjectHelpers.updateIndexes index -1 ((Dict.size questions) - 1) questions
+                updatedQuestions = ProjectHelpers.moveEntry index ProjectHelpers.Decrement ((Dict.size questions) - 1) questions
             in
             ( { model | questions = updatedQuestions }
             , Cmd.none

@@ -64,13 +64,17 @@ answerToString : Answer -> String
 answerToString (Answer val) =
    val
 
+sampleAnswer : Answer
+sampleAnswer =
+    Answer "This is a sample answer"
+
 init : (Model, Cmd msg)
 init =
     (
         { slideIndex = 0
         , questionIndex = 0
         , optRadio = OptRadio "0_0_0"
-        , answers = Dict.singleton 0 (Answer "This is a sample answer")
+        , answers = Dict.singleton 0 sampleAnswer
         }
         , Cmd.none
     )
@@ -92,19 +96,34 @@ type Direction =
     | Bottom
 
 type Msg =
-    Delete Int
+    Add
+    | Delete Int
     | Move Int Direction
     | Update Int String
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg ( { answers } as model ) =
     case msg of
-        Delete _ ->
-            ( model, Cmd.none )
+        Add ->
+            ( { model | answers = Dict.insert (Dict.size answers) sampleAnswer answers }
+            , Cmd.none
+            )
+
+        Delete index ->
+            let
+                (keepSameIndex, decrementIndex) =
+                    answers
+                        |> Dict.remove index
+                        |> Dict.partition (\i _ -> (i < index))
+                updatedAnswers = Dict.union keepSameIndex (ProjectHelpers.updateIndexes ProjectHelpers.Decrement decrementIndex)
+            in
+            ( { model | answers = updatedAnswers }
+            , Cmd.none
+            )
 
         Move index Up ->
             let
-                updatedAnswers = ProjectHelpers.shiftIndexes index (index - 1) answers
+                updatedAnswers = ProjectHelpers.flipAdjacentEntries index ProjectHelpers.Decrement answers
             in
             ( { model | answers = updatedAnswers }
             , Cmd.none
@@ -112,7 +131,7 @@ update msg ( { answers } as model ) =
 
         Move index Down ->
             let
-                updatedAnswers = ProjectHelpers.shiftIndexes index (index + 1) answers
+                updatedAnswers = ProjectHelpers.flipAdjacentEntries index ProjectHelpers.Increment answers
             in
             ( { model | answers = updatedAnswers }
             , Cmd.none
@@ -121,7 +140,7 @@ update msg ( { answers } as model ) =
 
         Move index Top ->
             let
-                updatedAnswers = ProjectHelpers.updateIndexes index 1 0 answers
+                updatedAnswers = ProjectHelpers.moveEntry index ProjectHelpers.Increment 0 answers
             in
             ( { model | answers = updatedAnswers }
             , Cmd.none
@@ -129,7 +148,7 @@ update msg ( { answers } as model ) =
 
         Move index Bottom ->
             let
-                updatedAnswers = ProjectHelpers.updateIndexes index -1 ((Dict.size answers) - 1) answers
+                updatedAnswers = ProjectHelpers.moveEntry index ProjectHelpers.Decrement ((Dict.size answers) - 1) answers
             in
             ( { model | answers = updatedAnswers }
             , Cmd.none
@@ -150,9 +169,11 @@ viewHeader =
 
 viewActionButtons : Html Msg
 viewActionButtons =
-    div
-        [ ]
-        [ ]
+    button
+        [ class "edit-page-answers-action-buttons"
+        , onClick Add
+        ]
+        [ text "Add Another Answer" ]
 
 viewMoveAnswerTopButton : Int -> Html Msg
 viewMoveAnswerTopButton index =
