@@ -2,8 +2,8 @@ module Data.AnswersArea exposing (answersAreaDecoder, encodeAnswersArea, establi
 
 import Data.ProjectHelpers as ProjectHelpers
 import Dict exposing (Dict)
-import Html exposing (Html, button, div, h3, input, table, text, tr)
-import Html.Attributes exposing (class, disabled, type_, value)
+import Html exposing (Html, button, div, h3, input, label, table, text, tr)
+import Html.Attributes exposing (checked, class, disabled, for, id, name, type_, value)
 import Html.Events exposing (onClick, onInput)
 import Json.Decode exposing (Decoder, field, map, string, succeed)
 import Json.Decode.Extra exposing (indexedList)
@@ -79,6 +79,10 @@ init =
         , Cmd.none
     )
 
+establishAnswerIndexes : Int -> Int -> Dict Int Answer -> Dict Int Answer
+establishAnswerIndexes _ _ answers =
+    answers
+
 establishIndexes : Int -> Int -> Model -> Model
 establishIndexes slideIndex questionIndex ( { answers } as model ) =
     {
@@ -96,7 +100,10 @@ type Msg =
     | Update Int String
 
 update : Msg -> Model -> (Model, Cmd Msg)
-update msg ( { answers } as model ) =
+update msg ( { slideIndex, questionIndex, answers } as model ) =
+    let
+        establishIndexesFnc = establishAnswerIndexes slideIndex questionIndex
+    in
     case msg of
         Add ->
             ( { model | answers = Dict.insert (Dict.size answers) sampleAnswer answers }
@@ -104,13 +111,14 @@ update msg ( { answers } as model ) =
             )
 
         Delete index ->
-            ( { model | answers = ProjectHelpers.deleteEntry index answers }
+            ( { model | answers = ProjectHelpers.deleteEntry index establishIndexesFnc answers }
             , Cmd.none
             )
 
         Move index ProjectHelpers.Up ->
             let
-                updatedAnswers = ProjectHelpers.flipAdjacentEntries index ProjectHelpers.Decrement answers
+                updatedAnswers = ProjectHelpers.flipAdjacentEntries
+                    index ProjectHelpers.Decrement establishIndexesFnc answers
             in
             ( { model | answers = updatedAnswers }
             , Cmd.none
@@ -118,7 +126,8 @@ update msg ( { answers } as model ) =
 
         Move index ProjectHelpers.Down ->
             let
-                updatedAnswers = ProjectHelpers.flipAdjacentEntries index ProjectHelpers.Increment answers
+                updatedAnswers = ProjectHelpers.flipAdjacentEntries
+                    index ProjectHelpers.Increment establishIndexesFnc answers
             in
             ( { model | answers = updatedAnswers }
             , Cmd.none
@@ -126,7 +135,9 @@ update msg ( { answers } as model ) =
 
         Move index ProjectHelpers.Top ->
             let
-                updatedAnswers = ProjectHelpers.moveEntry index ProjectHelpers.Increment 0 answers
+                updatedAnswers = ProjectHelpers.moveEntry
+                    index ProjectHelpers.Increment 0
+                    establishIndexesFnc answers
             in
             ( { model | answers = updatedAnswers }
             , Cmd.none
@@ -134,7 +145,10 @@ update msg ( { answers } as model ) =
 
         Move index ProjectHelpers.Bottom ->
             let
-                updatedAnswers = ProjectHelpers.moveEntry index ProjectHelpers.Decrement ((Dict.size answers) - 1) answers
+                finalIndex = (Dict.size answers) - 1
+                updatedAnswers = ProjectHelpers.moveEntry
+                    index ProjectHelpers.Decrement finalIndex
+                    establishIndexesFnc answers
             in
             ( { model | answers = updatedAnswers }
             , Cmd.none
@@ -201,21 +215,43 @@ viewDeleteButton index numberAnswers =
         ]
         [ text "Delete This Answer" ]
 
-viewAnswerTableRowEntry : Int -> Int -> Answer -> List (Html Msg) -> List (Html Msg)
-viewAnswerTableRowEntry numberAnswers index answer l =
+viewIsCorrectRadioButton : Int -> Int -> Int -> OptRadio -> Html Msg
+viewIsCorrectRadioButton slideIndex questionIndex answerIndex correctAnswer =
+    let
+        nameValue = "candor_answer_" ++ (String.fromInt slideIndex) ++ "_" ++ (String.fromInt questionIndex)
+        idValue = nameValue ++ "_" ++ (String.fromInt answerIndex)
+    in
+    label
+        [ for idValue ]
+        [
+            input
+                [ type_ "radio"
+                , id idValue
+                , name nameValue
+                , value idValue
+                , checked (correctAnswer == (OptRadio idValue))
+                ]
+                [ ]
+            , text "is Correct?"
+        ]
+
+
+viewAnswerTableRowEntry : Int -> OptRadio -> Int -> Int -> Int -> Answer -> List (Html Msg) -> List (Html Msg)
+viewAnswerTableRowEntry numberAnswers correctAnswer slideIndex questionIndex answerIndex answer l =
     let
         entry =
             tr
                 [ ]
-                [ viewMoveAnswerTopButton index
-                , viewMoveAnswerUpButton index
-                , viewMoveAnswerDownButton index numberAnswers
-                , viewMoveAnswerBottomButton index numberAnswers
-                , viewDeleteButton index numberAnswers
+                [ viewMoveAnswerTopButton answerIndex
+                , viewMoveAnswerUpButton answerIndex
+                , viewMoveAnswerDownButton answerIndex numberAnswers
+                , viewMoveAnswerBottomButton answerIndex numberAnswers
+                , viewDeleteButton answerIndex numberAnswers
+                , viewIsCorrectRadioButton slideIndex questionIndex answerIndex correctAnswer
                 , input
                     [ type_ "text"
                     , value (answerToString answer)
-                    , onInput (Update index)
+                    , onInput (Update answerIndex)
                     ]
                     [ ]
                 ]
@@ -223,8 +259,8 @@ viewAnswerTableRowEntry numberAnswers index answer l =
     List.append l (List.singleton entry)
 
 viewAnswersTable : Model -> Html Msg
-viewAnswersTable { answers } =
-    Dict.foldl (viewAnswerTableRowEntry (Dict.size answers)) [ ] answers
+viewAnswersTable { slideIndex, questionIndex, optRadio, answers } =
+    Dict.foldl (viewAnswerTableRowEntry (Dict.size answers) optRadio slideIndex questionIndex) [ ] answers
         |> table [ class "edit-page-answers-table" ]
 
 view : Model -> Html Msg

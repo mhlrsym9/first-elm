@@ -1,20 +1,21 @@
-module Data.Project exposing (encodeProject, establishIndexes, insertSlideBefore, projectDecoder, init, Model, Msg, update, view)
+module Data.Project exposing (encodeProject, establishIndexes, projectDecoder, init, Model, Msg, update, view)
 
-import Array exposing (Array)
 import Data.ProjectHelpers as ProjectHelpers
 import Data.Slide as Slide
 import Dict exposing (Dict)
+import Dict.Extra
 import Html exposing (Html, button, div, text)
 import Html.Attributes exposing (class, disabled)
 import Html.Events exposing (onClick)
-import Json.Decode exposing (array, Decoder, succeed)
+import Json.Decode exposing (Decoder, succeed)
 import Json.Decode.Extra exposing (indexedList)
 import Json.Decode.Pipeline exposing (hardcoded, required)
 import Json.Encode as Encode
 
 type alias Model =
     { slideIndex : Int
-    , slides : Dict Int Slide.Model }
+    , slides : Dict Int Slide.Model
+    }
 
 slideDecoder : Int -> Decoder (Int, Slide.Model)
 slideDecoder index =
@@ -40,17 +41,21 @@ init : (Model, Cmd Msg)
 init =
     ( { slideIndex = 0, slides = Dict.empty }, Cmd.none )
 
+establishSlideIndexes : Dict Int Slide.Model -> Dict Int Slide.Model
+establishSlideIndexes slides =
+    Dict.map (\i s -> Slide.establishIndexes i s) slides
+
 establishIndexes : Model -> Model
 establishIndexes ( { slides } as model ) =
-    { model | slides = Dict.map (\i s -> Slide.establishIndexes i s) slides }
+    { model | slides = establishSlideIndexes slides }
 
 -- UPDATE
 
 type Msg =
     DeleteSlide
     | DisplaySlide Int
-    | InsertSlideAfter
-    | InsertSlideBefore
+    | InsertSlide ProjectHelpers.Direction
+    | Move ProjectHelpers.Direction
     | SlideMsg Slide.Msg
 
 createNewSlide : Int -> (Dict Int Slide.Model, Cmd Msg)
@@ -67,21 +72,14 @@ insertSlideAtSlicePoint slicePoint ( { slides } as model ) =
     let
         (beforeSlides, afterSlides) = Dict.partition (\i _ -> (i < slicePoint)) slides
         (newSlides, commands) = createNewSlide slicePoint
+        updatedSlides =
+            afterSlides
+                |> Dict.Extra.mapKeys (\k -> k + 1)
+                |> establishSlideIndexes
+                |> Dict.union newSlides
+                |> Dict.union beforeSlides
     in
-    (
-        { model | slides = Dict.union beforeSlides ( Dict.union newSlides afterSlides )
-                , slideIndex = slicePoint
-        }
-        , commands
-    )
-
-insertSlideAfter : Model -> (Model, Cmd Msg)
-insertSlideAfter ( { slideIndex } as model ) =
-    insertSlideAtSlicePoint (slideIndex + 1) model
-
-insertSlideBefore : Model -> (Model, Cmd Msg)
-insertSlideBefore ( { slideIndex } as model ) =
-    insertSlideAtSlicePoint slideIndex model
+    ( { model | slides = updatedSlides, slideIndex = slicePoint }, commands )
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg ( { slideIndex, slides } as model ) =
@@ -95,7 +93,7 @@ update msg ( { slideIndex, slides } as model ) =
                         slideIndex - 1
             in
             (
-                { model | slides = ProjectHelpers.deleteEntry slideIndex slides
+                { model | slides = ProjectHelpers.deleteEntry slideIndex establishSlideIndexes slides
                         , slideIndex = updatedSlideIndex
                 }
                 , Cmd.none
@@ -104,11 +102,70 @@ update msg ( { slideIndex, slides } as model ) =
         DisplaySlide updatedSlideIndex ->
             ( { model | slideIndex = updatedSlideIndex }, Cmd.none )
 
-        InsertSlideAfter ->
-            insertSlideAfter model
+        InsertSlide ProjectHelpers.Top ->
+            insertSlideAtSlicePoint 0 model
 
-        InsertSlideBefore ->
-            insertSlideBefore model
+        InsertSlide ProjectHelpers.Up ->
+            insertSlideAtSlicePoint slideIndex model
+
+        InsertSlide ProjectHelpers.Down ->
+            insertSlideAtSlicePoint (slideIndex + 1) model
+
+        InsertSlide ProjectHelpers.Bottom ->
+            insertSlideAtSlicePoint ((Dict.size slides) - 1) model
+
+        Move ProjectHelpers.Top ->
+            let
+                updatedSlides = ProjectHelpers.moveEntry
+                    slideIndex ProjectHelpers.Increment 0 establishSlideIndexes slides
+            in
+            (
+                { model
+                    | slides = updatedSlides
+                    , slideIndex = 0
+                }
+                , Cmd.none
+            )
+
+        Move ProjectHelpers.Up ->
+            let
+                updatedSlides = ProjectHelpers.flipAdjacentEntries
+                    slideIndex ProjectHelpers.Decrement establishSlideIndexes slides
+            in
+            (
+                { model
+                    | slides = updatedSlides
+                    , slideIndex = slideIndex - 1
+                }
+                , Cmd.none
+            )
+
+        Move ProjectHelpers.Down ->
+            let
+                updatedSlides = ProjectHelpers.flipAdjacentEntries
+                    slideIndex ProjectHelpers.Increment establishSlideIndexes slides
+            in
+            (
+                { model
+                    | slides = updatedSlides
+                    , slideIndex = slideIndex + 1
+                }
+                , Cmd.none
+            )
+
+        Move ProjectHelpers.Bottom ->
+            let
+                finalIndex = (Dict.size slides) - 1
+                updatedSlides = ProjectHelpers.moveEntry
+                    slideIndex ProjectHelpers.Decrement finalIndex establishSlideIndexes slides
+            in
+            (
+                { model
+                    | slides = updatedSlides
+                    , slideIndex = finalIndex
+                }
+                , Cmd.none
+            )
 
         SlideMsg slideMsg ->
             let
@@ -196,11 +253,19 @@ viewSlideInfoRow ( { slideIndex, slides } as model ) =
         , viewLastSlideButton model
         ]
 
+viewInsertAtTopButton : Html Msg
+viewInsertAtTopButton =
+    button
+        [ class "slide-button"
+        , onClick (InsertSlide ProjectHelpers.Top)
+        ]
+        [ text "<<- Insert new slide before first slide"]
+
 viewInsertBeforeSlideButton : Html Msg
 viewInsertBeforeSlideButton =
     button
         [ class "slide-button"
-        , onClick InsertSlideBefore
+        , onClick (InsertSlide ProjectHelpers.Up)
         ]
         [ text "<- Insert new slide before this slide"]
 
@@ -208,17 +273,75 @@ viewInsertAfterSlideButton : Html Msg
 viewInsertAfterSlideButton =
     button
         [ class "slide-button"
-        , onClick InsertSlideAfter
+        , onClick (InsertSlide ProjectHelpers.Down)
         ]
         [ text "Add new slide after this slide ->"]
+
+viewInsertAtBottomButton : Html Msg
+viewInsertAtBottomButton =
+    button
+        [ class "slide-button"
+        , onClick (InsertSlide ProjectHelpers.Bottom)
+        ]
+        [ text "Insert new slide after last slide ->>"]
 
 viewInsertSlideActionRow : Html Msg
 viewInsertSlideActionRow =
     div
          [ class "edit-page-insert-slide-action-row" ]
-         [ viewInsertBeforeSlideButton
+         [ viewInsertAtTopButton
+         , viewInsertBeforeSlideButton
          , viewInsertAfterSlideButton
+         , viewInsertAtBottomButton
          ]
+
+viewMoveSlideToTopButton : Model -> Html Msg
+viewMoveSlideToTopButton { slideIndex } =
+    button
+        [ onClick (Move ProjectHelpers.Top)
+        , disabled (0 == slideIndex)
+        ]
+        [ text "Move Slide to Top" ]
+
+viewMoveSlideUpButton : Model -> Html Msg
+viewMoveSlideUpButton { slideIndex } =
+    button
+        [ onClick (Move ProjectHelpers.Up)
+        , disabled (0 == slideIndex)
+        ]
+        [ text "Move Slide Up" ]
+
+viewMoveSlideDownButton : Model -> Html Msg
+viewMoveSlideDownButton { slideIndex, slides }  =
+    let
+        numberSlides = Dict.size slides
+    in
+    button
+        [ onClick (Move ProjectHelpers.Down)
+        , disabled ( slideIndex == (numberSlides - 1) )
+        ]
+        [ text "Move Slide Down" ]
+
+viewMoveSlideToBottomButton : Model -> Html Msg
+viewMoveSlideToBottomButton { slideIndex, slides } =
+    let
+        numberSlides = Dict.size slides
+    in
+    button
+        [ onClick (Move ProjectHelpers.Bottom)
+        , disabled ( slideIndex == (numberSlides - 1) )
+        ]
+        [ text "Move Slide to Bottom" ]
+
+viewMoveSlideActionRow : Model -> Html Msg
+viewMoveSlideActionRow model =
+    div
+        [ class "edit-page-move-slide-action-row" ]
+        [ viewMoveSlideToTopButton model
+        , viewMoveSlideUpButton model
+        , viewMoveSlideDownButton model
+        , viewMoveSlideToBottomButton model
+        ]
 
 viewDeleteSlideActionRow : Model -> Html Msg
 viewDeleteSlideActionRow { slides } =
@@ -249,6 +372,7 @@ viewCurrentSlide ( { slideIndex, slides } as model ) =
         [ class "edit-page-current-slide" ]
         [ viewSlideInfoRow model
         , viewInsertSlideActionRow
+        , viewMoveSlideActionRow model
         , viewDeleteSlideActionRow model
         , viewSlide (Dict.get slideIndex slides)
         ]

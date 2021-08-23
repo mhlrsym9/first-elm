@@ -21,8 +21,8 @@ adjustIndex shiftBy atIndex =
         Decrement ->
             atIndex - 1
 
-flipAdjacentEntries : Int -> IndexAdjustment -> Dict Int b -> Dict Int b
-flipAdjacentEntries atIndex shiftBy answers =
+flipAdjacentEntries : Int -> IndexAdjustment -> (Dict Int b -> Dict Int b) -> Dict Int b -> Dict Int b
+flipAdjacentEntries atIndex shiftBy establishIndexesFnc answers =
     let
         otherIndex = adjustIndex shiftBy atIndex
         maybeOther = Dict.get otherIndex answers
@@ -34,9 +34,17 @@ flipAdjacentEntries atIndex shiftBy answers =
             in
             case maybeAt of
                 Just at ->
+                    let
+                        atDict = at
+                            |> Dict.singleton otherIndex
+                            |> establishIndexesFnc
+                        otherDict = other
+                            |> Dict.singleton atIndex
+                            |> establishIndexesFnc
+                    in
                     answers
-                        |> Dict.insert otherIndex at
-                        |> Dict.insert atIndex other
+                        |> Dict.union atDict
+                        |> Dict.union otherDict
 
                 Nothing ->
                     answers
@@ -44,15 +52,16 @@ flipAdjacentEntries atIndex shiftBy answers =
         Nothing ->
             answers
 
-updateIndexes : IndexAdjustment -> Dict Int b -> Dict Int b
-updateIndexes shiftBy theDict =
+updateIndexes : IndexAdjustment -> (Dict Int b -> Dict Int b) -> Dict Int b -> Dict Int b
+updateIndexes shiftBy establishIndexesFnc theDict =
     theDict
         |> Dict.toList
         |> List.map (\(i, q) -> ( (adjustIndex shiftBy i), q ) )
         |> Dict.fromList
+        |> establishIndexesFnc
 
-moveEntry : Int -> IndexAdjustment -> Int -> Dict Int b -> Dict Int b
-moveEntry index shiftBy finalIndex theDict =
+moveEntry : Int -> IndexAdjustment -> Int -> (Dict Int b -> Dict Int b) -> Dict Int b -> Dict Int b
+moveEntry index shiftBy finalIndex establishIndexesFnc theDict =
     let
         maybeAt = Dict.get index theDict
     in
@@ -64,10 +73,13 @@ moveEntry index shiftBy finalIndex theDict =
                         |> Dict.remove index
                         |> Dict.partition (\i a -> (i < index))
 
+                atIndex = Dict.singleton finalIndex at
+                    |> establishIndexesFnc
+
                 updatedBeforeIndex =
                     case shiftBy of
                         Increment ->
-                            updateIndexes shiftBy beforeIndex
+                            updateIndexes shiftBy establishIndexesFnc beforeIndex
 
                         Decrement ->
                             beforeIndex
@@ -78,21 +90,21 @@ moveEntry index shiftBy finalIndex theDict =
                             afterIndex
 
                         Decrement ->
-                            updateIndexes shiftBy afterIndex
+                            updateIndexes shiftBy establishIndexesFnc afterIndex
 
             in
             Dict.union updatedBeforeIndex updatedAfterIndex
-                |> Dict.insert finalIndex at
+                |> Dict.union atIndex
 
         Nothing ->
             theDict
 
-deleteEntry : Int -> Dict Int b -> Dict Int b
-deleteEntry index theDict =
+deleteEntry : Int -> (Dict Int b -> Dict Int b) -> Dict Int b -> Dict Int b
+deleteEntry index establishIndexesFnc theDict =
     let
         (keepSameIndex, decrementIndex) =
             theDict
                 |> Dict.remove index
                 |> Dict.partition (\i _ -> (i < index))
     in
-    Dict.union keepSameIndex (updateIndexes Decrement decrementIndex)
+    Dict.union keepSameIndex (updateIndexes Decrement establishIndexesFnc decrementIndex)
