@@ -71,7 +71,7 @@ moveEntry index shiftBy finalIndex establishIndexesFnc theDict =
                 (beforeIndex, afterIndex) =
                     theDict
                         |> Dict.remove index
-                        |> Dict.partition (\i a -> (i < index))
+                        |> Dict.partition (\i _ -> (i < index))
 
                 atIndex = Dict.singleton finalIndex at
                     |> establishIndexesFnc
