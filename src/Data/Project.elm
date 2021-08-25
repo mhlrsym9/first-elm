@@ -41,13 +41,13 @@ init : (Model, Cmd Msg)
 init =
     ( { slideIndex = 0, slides = Dict.empty }, Cmd.none )
 
-establishSlideIndexes : Dict Int Slide.Model -> Dict Int Slide.Model
-establishSlideIndexes slides =
-    Dict.map (\i s -> Slide.establishIndexes i s) slides
+updateSlideIndexes : Dict Int Slide.Model -> Dict Int Slide.Model
+updateSlideIndexes slides =
+    Dict.map Slide.updateSlideIndex slides
 
 establishIndexes : Model -> Model
 establishIndexes ( { slides } as model ) =
-    { model | slides = establishSlideIndexes slides }
+    { model | slides = Dict.map (\i s -> Slide.establishIndexes i s) slides }
 
 -- UPDATE
 
@@ -63,9 +63,8 @@ createNewSlide slideIndex =
     let
         (newSlide, slideCommands) =
             Slide.init { slideIndex = slideIndex }
-        updatedSlide = Slide.establishIndexes slideIndex newSlide
     in
-    (Dict.singleton slideIndex updatedSlide, Cmd.map SlideMsg slideCommands)
+    (Dict.singleton slideIndex newSlide, Cmd.map SlideMsg slideCommands)
 
 insertSlideAtSlicePoint : Int -> Model -> (Model, Cmd Msg)
 insertSlideAtSlicePoint slicePoint ( { slides } as model ) =
@@ -75,7 +74,7 @@ insertSlideAtSlicePoint slicePoint ( { slides } as model ) =
         updatedSlides =
             afterSlides
                 |> Dict.Extra.mapKeys (\k -> k + 1)
-                |> establishSlideIndexes
+                |> updateSlideIndexes
                 |> Dict.union newSlides
                 |> Dict.union beforeSlides
     in
@@ -93,7 +92,7 @@ update msg ( { slideIndex, slides } as model ) =
                         slideIndex - 1
             in
             (
-                { model | slides = ProjectHelpers.deleteEntry slideIndex establishSlideIndexes slides
+                { model | slides = ProjectHelpers.deleteEntry slideIndex updateSlideIndexes slides
                         , slideIndex = updatedSlideIndex
                 }
                 , Cmd.none
@@ -117,7 +116,7 @@ update msg ( { slideIndex, slides } as model ) =
         Move ProjectHelpers.Top ->
             let
                 updatedSlides = ProjectHelpers.moveEntry
-                    slideIndex ProjectHelpers.Increment 0 establishSlideIndexes slides
+                    slideIndex ProjectHelpers.Increment 0 updateSlideIndexes slides
             in
             (
                 { model
@@ -130,7 +129,7 @@ update msg ( { slideIndex, slides } as model ) =
         Move ProjectHelpers.Up ->
             let
                 updatedSlides = ProjectHelpers.flipAdjacentEntries
-                    slideIndex ProjectHelpers.Decrement establishSlideIndexes slides
+                    slideIndex ProjectHelpers.Decrement updateSlideIndexes slides
             in
             (
                 { model
@@ -143,7 +142,7 @@ update msg ( { slideIndex, slides } as model ) =
         Move ProjectHelpers.Down ->
             let
                 updatedSlides = ProjectHelpers.flipAdjacentEntries
-                    slideIndex ProjectHelpers.Increment establishSlideIndexes slides
+                    slideIndex ProjectHelpers.Increment updateSlideIndexes slides
             in
             (
                 { model
@@ -157,7 +156,7 @@ update msg ( { slideIndex, slides } as model ) =
             let
                 finalIndex = (Dict.size slides) - 1
                 updatedSlides = ProjectHelpers.moveEntry
-                    slideIndex ProjectHelpers.Decrement finalIndex establishSlideIndexes slides
+                    slideIndex ProjectHelpers.Decrement finalIndex updateSlideIndexes slides
             in
             (
                 { model

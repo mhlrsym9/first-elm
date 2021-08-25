@@ -1,4 +1,4 @@
-module Data.Question exposing (encodeQuestion, establishIndexes, init, Model, Msg(..), questionDecoder, update, view)
+module Data.Question exposing (encodeQuestion, establishIndexes, init, Model, Msg(..), questionDecoder, update, updateQuestionIndex, updateSlideIndex, view)
 
 import Data.AnswersArea as AnswersArea
 import Html exposing (Html, button, div, input, text)
@@ -81,13 +81,47 @@ init ( { questionIndex, slideIndex } as flags ) =
     )
 
 establishAnswersAreaIndexes : Int -> Int -> Model -> Visibility
-establishAnswersAreaIndexes slideIndex questionIndex ( { answersArea } ) =
+establishAnswersAreaIndexes slideIndex questionIndex { answersArea } =
     case answersArea of
         Hidden m ->
             Hidden (AnswersArea.establishIndexes slideIndex questionIndex m)
 
         Visible m ->
             Visible (AnswersArea.establishIndexes slideIndex questionIndex m)
+
+updateQuestionIndex : Int -> Model -> Model
+updateQuestionIndex questionIndex ( { answersArea } as model )  =
+    let
+        updatedAnswersArea =
+            case answersArea of
+                Hidden m ->
+                    Hidden (AnswersArea.updateQuestionIndexes questionIndex m)
+
+                Visible m ->
+                    Visible (AnswersArea.updateQuestionIndexes questionIndex m)
+    in
+    {
+        model
+            | questionIndex = questionIndex
+            , answersArea = updatedAnswersArea
+    }
+
+updateSlideIndex : Int -> Int -> Model -> Model
+updateSlideIndex slideIndex _ ( { answersArea } as model ) =
+    let
+        updatedAnswersArea =
+            case answersArea of
+                Hidden m ->
+                    Hidden (AnswersArea.updateSlideIndexes slideIndex m)
+
+                Visible m ->
+                    Visible (AnswersArea.updateSlideIndexes slideIndex m)
+    in
+    {
+        model
+            | slideIndex = slideIndex
+            , answersArea = updatedAnswersArea
+    }
 
 establishIndexes : Int -> Int -> Model -> Model
 establishIndexes slideIndex questionIndex model =

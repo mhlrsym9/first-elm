@@ -1,4 +1,4 @@
-module Data.Slide exposing (encodeSlide, establishIndexes, init, Model, Msg, slideDecoder, textToString, update, view)
+module Data.Slide exposing (encodeSlide, establishIndexes, init, Model, Msg, slideDecoder, textToString, update, updateSlideIndex, view)
 
 import Data.QuestionsArea as QuestionsArea
 import Html exposing (Html, div, text, textarea)
@@ -55,6 +55,14 @@ init ( { slideIndex } as flags ) =
         }
         , Cmd.map QuestionsAreaMsg commands
     )
+
+updateSlideIndex : Int -> Model -> Model
+updateSlideIndex slideIndex ( { questionsArea } as model ) =
+    {
+        model
+            | questionsArea = QuestionsArea.updateSlideIndexes slideIndex questionsArea
+            , slideIndex = slideIndex
+    }
 
 establishIndexes : Int -> Model -> Model
 establishIndexes slideIndex ( { questionsArea } as model ) =

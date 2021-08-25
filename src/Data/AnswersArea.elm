@@ -1,4 +1,4 @@
-module Data.AnswersArea exposing (answersAreaDecoder, encodeAnswersArea, establishIndexes, init, Model, Msg, parseOptRadio, update, view)
+module Data.AnswersArea exposing (answersAreaDecoder, encodeAnswersArea, establishIndexes, init, Model, Msg, parseOptRadio, update, updateQuestionIndexes, updateSlideIndexes, view)
 
 import Data.ProjectHelpers as ProjectHelpers
 import Dict exposing (Dict)
@@ -133,9 +133,21 @@ establishOptRadio updatedSlideIndex updatedQuestionIndex { optRadio } =
         Err _ ->
             optRadio
 
-establishAnswerIndexes : Int -> Int -> Dict Int Answer -> Dict Int Answer
-establishAnswerIndexes _ _ answers =
-    answers
+updateQuestionIndexes : Int -> Model -> Model
+updateQuestionIndexes questionIndex ( { slideIndex } as model ) =
+    {
+        model
+            | questionIndex = questionIndex
+            , optRadio = establishOptRadio slideIndex questionIndex model
+    }
+
+updateSlideIndexes : Int -> Model -> Model
+updateSlideIndexes slideIndex ( { questionIndex } as model ) =
+    {
+        model
+            | slideIndex = slideIndex
+            , optRadio = establishOptRadio slideIndex questionIndex model
+    }
 
 establishIndexes : Int -> Int -> Model -> Model
 establishIndexes slideIndex questionIndex ( { optRadio, answers } as model ) =
@@ -144,7 +156,6 @@ establishIndexes slideIndex questionIndex ( { optRadio, answers } as model ) =
             | slideIndex = slideIndex
             , questionIndex = questionIndex
             , optRadio = establishOptRadio slideIndex questionIndex model
-            , answers = establishAnswerIndexes slideIndex questionIndex answers
     }
 
 -- UPDATE
@@ -241,9 +252,6 @@ updateOptRadioDuringMove ( { answers, optRadio } as model ) answerIndex adjustme
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg ( { slideIndex, questionIndex, answers } as model ) =
-    let
-        establishIndexesFnc = establishAnswerIndexes slideIndex questionIndex
-    in
     case msg of
         Add ->
             ( { model | answers = Dict.insert (Dict.size answers) sampleAnswer answers }
@@ -253,7 +261,7 @@ update msg ( { slideIndex, questionIndex, answers } as model ) =
         Delete answerIndex ->
             (
                 { model
-                    | answers = ProjectHelpers.deleteEntry answerIndex establishIndexesFnc answers
+                    | answers = ProjectHelpers.deleteEntry answerIndex identity answers
                     , optRadio = updateOptRadioDuringDelete model answerIndex
                 }
                 , Cmd.none
@@ -263,7 +271,7 @@ update msg ( { slideIndex, questionIndex, answers } as model ) =
             let
                 updatedAnswers = ProjectHelpers.moveEntry
                     index ProjectHelpers.Increment 0
-                    establishIndexesFnc answers
+                    identity answers
                 updatedOptRadio = updateOptRadioDuringMove
                     model index ProjectHelpers.Increment 0
             in
@@ -279,7 +287,7 @@ update msg ( { slideIndex, questionIndex, answers } as model ) =
             (
                 { model
                     | answers = ProjectHelpers.flipAdjacentEntries
-                        answerIndex ProjectHelpers.Decrement establishIndexesFnc answers
+                        answerIndex ProjectHelpers.Decrement identity answers
                     , optRadio = updateOptRadioDuringFlip model answerIndex ProjectHelpers.Decrement
                 }
                 , Cmd.none
@@ -289,7 +297,7 @@ update msg ( { slideIndex, questionIndex, answers } as model ) =
             (
                 { model
                     | answers = ProjectHelpers.flipAdjacentEntries
-                        answerIndex ProjectHelpers.Increment establishIndexesFnc answers
+                        answerIndex ProjectHelpers.Increment identity answers
                     , optRadio = updateOptRadioDuringFlip model answerIndex ProjectHelpers.Increment
                 }
                 , Cmd.none
@@ -300,7 +308,7 @@ update msg ( { slideIndex, questionIndex, answers } as model ) =
                 finalIndex = (Dict.size answers) - 1
                 updatedAnswers = ProjectHelpers.moveEntry
                     index ProjectHelpers.Decrement finalIndex
-                    establishIndexesFnc answers
+                    identity answers
                 updatedOptRadio = updateOptRadioDuringMove
                     model index ProjectHelpers.Decrement finalIndex
             in

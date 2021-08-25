@@ -1,4 +1,4 @@
-module Data.QuestionsArea exposing (encodeQuestionsArea, establishIndexes, init, Model, Msg, questionsAreaDecoder, update, view)
+module Data.QuestionsArea exposing (encodeQuestionsArea, establishIndexes, init, Model, Msg, questionsAreaDecoder, update, updateSlideIndexes, view)
 
 import Data.ProjectHelpers as ProjectHelpers
 import Data.Question as Question
@@ -55,16 +55,24 @@ init ( { slideIndex } ) =
         , Cmd.map (QuestionMsg 0) questionCommands
     )
 
-establishQuestionIndexes : Int -> Dict Int Question.Model -> Dict Int Question.Model
-establishQuestionIndexes slideIndex questions =
-    Dict.map (Question.establishIndexes slideIndex) questions
+updateQuestionIndexes : Dict Int Question.Model -> Dict Int Question.Model
+updateQuestionIndexes questions =
+    Dict.map Question.updateQuestionIndex questions
+
+updateSlideIndexes : Int -> Model -> Model
+updateSlideIndexes slideIndex ( { questions } as model ) =
+    {
+        model
+            | slideIndex = slideIndex
+            , questions = Dict.map (Question.updateSlideIndex slideIndex) questions
+    }
 
 establishIndexes : Int -> Model -> Model
 establishIndexes slideIndex ( { questions } as model ) =
     {
         model
             | slideIndex = slideIndex
-            , questions = establishQuestionIndexes slideIndex questions
+            , questions = Dict.map (Question.establishIndexes slideIndex) questions
     }
 
 -- UPDATE
@@ -97,9 +105,6 @@ updateQuestion index questionMsg ( { questions } as model ) =
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg ( { slideIndex, questions } as model ) =
-    let
-        establishIndexesFnc = establishQuestionIndexes slideIndex
-    in
     case msg of
         Add ->
             let
@@ -112,7 +117,7 @@ update msg ( { slideIndex, questions } as model ) =
             )
 
         Delete index ->
-            ( { model | questions = ProjectHelpers.deleteEntry index establishIndexesFnc questions }
+            ( { model | questions = ProjectHelpers.deleteEntry index updateQuestionIndexes questions }
             , Cmd.none
             )
 
@@ -123,7 +128,7 @@ update msg ( { slideIndex, questions } as model ) =
             let
                 updatedQuestions = ProjectHelpers.moveEntry
                     index ProjectHelpers.Increment 0
-                    establishIndexesFnc questions
+                    updateQuestionIndexes questions
             in
             ( { model | questions = updatedQuestions }
             , Cmd.none
@@ -132,7 +137,7 @@ update msg ( { slideIndex, questions } as model ) =
         Move index ProjectHelpers.Up ->
             let
                 updatedQuestions = ProjectHelpers.flipAdjacentEntries
-                    index ProjectHelpers.Decrement establishIndexesFnc questions
+                    index ProjectHelpers.Decrement updateQuestionIndexes questions
             in
             ( { model | questions = updatedQuestions }
             , Cmd.none
@@ -141,7 +146,7 @@ update msg ( { slideIndex, questions } as model ) =
         Move index ProjectHelpers.Down ->
             let
                 updatedQuestions = ProjectHelpers.flipAdjacentEntries
-                    index ProjectHelpers.Increment establishIndexesFnc questions
+                    index ProjectHelpers.Increment updateQuestionIndexes questions
             in
             ( { model | questions = updatedQuestions }
             , Cmd.none
@@ -152,7 +157,7 @@ update msg ( { slideIndex, questions } as model ) =
                 finalIndex = ((Dict.size questions) - 1)
                 updatedQuestions = ProjectHelpers.moveEntry
                     index ProjectHelpers.Decrement finalIndex
-                    establishIndexesFnc questions
+                    updateQuestionIndexes questions
             in
             ( { model | questions = updatedQuestions }
             , Cmd.none
