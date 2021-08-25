@@ -42,15 +42,15 @@ textToString : Text -> String
 textToString (Text val) =
     val
 
-init : (Model, Cmd Msg)
-init =
+init : { slideIndex : Int } -> (Model, Cmd Msg)
+init ( { slideIndex } as flags ) =
     let
         (questionsArea, commands) =
-            QuestionsArea.init
+            QuestionsArea.init flags
     in
     (
         { slideText = Text "This is a test"
-        , slideIndex = 0
+        , slideIndex = slideIndex
         , questionsArea = questionsArea
         }
         , Cmd.map QuestionsAreaMsg commands

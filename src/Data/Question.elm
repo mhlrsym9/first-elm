@@ -66,10 +66,10 @@ textToString (Text val) =
     val
 
 init : { questionIndex : Int, slideIndex : Int } -> (Model, Cmd Msg)
-init { questionIndex, slideIndex } =
+init ( { questionIndex, slideIndex } as flags ) =
     let
         (answersAreaModel, answersAreaCommands) =
-            AnswersArea.init
+            AnswersArea.init flags
     in
     (
         { questionIndex = questionIndex

@@ -9,7 +9,7 @@ import Json.Decode exposing (Decoder, field, map, string, succeed)
 import Json.Decode.Extra exposing (indexedList)
 import Json.Decode.Pipeline exposing (custom, hardcoded, required)
 import Json.Encode as Encode
-import Parser exposing ((|.), (|=), end, int, keyword, Parser, run, symbol, token)
+import Parser exposing ((|.), (|=), end, int, Parser, run, symbol, token)
 
 type OptRadio =
     OptRadio String
@@ -69,28 +69,32 @@ sampleAnswer : Answer
 sampleAnswer =
     Answer "This is a sample answer"
 
-getCandorAnswer: Int -> Int -> Int -> String
-getCandorAnswer slideIndex questionIndex answerIndex =
-    (getCandorAnswerHeader slideIndex questionIndex) ++ "_" ++ (String.fromInt answerIndex)
-
-getOptRadio : Int -> Int -> Int -> OptRadio
-getOptRadio slideIndex questionIndex answerIndex =
-    OptRadio (getCandorAnswer slideIndex questionIndex answerIndex)
-
-getCandorAnswerHeader : Int -> Int -> String
-getCandorAnswerHeader slideIndex questionIndex =
+getCandorAnswerHeaderFromIndexes : Indexes -> String
+getCandorAnswerHeaderFromIndexes { slideIndex, questionIndex } =
     "candor_answer_" ++ (String.fromInt slideIndex) ++ "_" ++ (String.fromInt questionIndex)
 
-getCandorAnswerHeaderFromModel : Model -> String
-getCandorAnswerHeaderFromModel { slideIndex, questionIndex } =
-    getCandorAnswerHeader slideIndex questionIndex
+getCandorAnswerHeader : Model -> String
+getCandorAnswerHeader { slideIndex, questionIndex } =
+    getCandorAnswerHeaderFromIndexes { slideIndex = slideIndex, questionIndex = questionIndex, answerIndex = 0 }
 
-init : (Model, Cmd msg)
-init =
+getCandorAnswerFromIndexes : Indexes -> String
+getCandorAnswerFromIndexes ( { answerIndex } as indexes ) =
+    (getCandorAnswerHeaderFromIndexes indexes) ++ "_" ++ (String.fromInt answerIndex)
+
+getCandorAnswer: Model -> Int -> String
+getCandorAnswer model answerIndex =
+    (getCandorAnswerHeader model) ++ "_" ++ (String.fromInt answerIndex)
+
+getOptRadio : Model -> Int -> OptRadio
+getOptRadio model answerIndex =
+    OptRadio (getCandorAnswer model answerIndex)
+
+init : { slideIndex : Int, questionIndex : Int } -> (Model, Cmd msg)
+init ( { slideIndex, questionIndex } ) =
     (
-        { slideIndex = 0
-        , questionIndex = 0
-        , optRadio = OptRadio "0_0_0"
+        { slideIndex = slideIndex
+        , questionIndex = questionIndex
+        , optRadio = OptRadio (getCandorAnswerFromIndexes { slideIndex = slideIndex, questionIndex = questionIndex, answerIndex = 0} )
         , answers = Dict.singleton 0 sampleAnswer
         }
         , Cmd.none
@@ -113,13 +117,19 @@ parseOptRadio =
         |. end
 
 establishOptRadio : Int -> Int -> Model -> OptRadio
-establishOptRadio updatedSlideIndex updatedQuestionIndex { slideIndex, questionIndex, optRadio } =
+establishOptRadio updatedSlideIndex updatedQuestionIndex { optRadio } =
     let
         possibleIndexes = run parseOptRadio (optRadioToString optRadio)
     in
     case possibleIndexes of
         Ok index ->
-            OptRadio (getCandorAnswer updatedSlideIndex updatedQuestionIndex index.answerIndex)
+            OptRadio
+                ( getCandorAnswerFromIndexes
+                    { slideIndex = updatedSlideIndex
+                    , questionIndex = updatedQuestionIndex
+                    , answerIndex = index.answerIndex
+                    }
+                )
         Err _ ->
             optRadio
 
@@ -163,10 +173,10 @@ matchAnswerIndexToUpdatedOptRadio ((OptRadio or) as originalOptRadio) updatedOpt
         Err _ ->
             originalOptRadio
 
-updateOptRadioDuringDelete : Int -> Int -> Int -> OptRadio -> Dict Int b -> OptRadio
-updateOptRadioDuringDelete slideIndex questionIndex answerIndex originalOptRadio answers =
+updateOptRadioDuringDelete : Model -> Int -> OptRadio
+updateOptRadioDuringDelete ( { answers, optRadio } as model ) answerIndex =
     let
-        getThisCandorAnswer = getOptRadio slideIndex questionIndex
+        getThisCandorAnswer = getOptRadio model
         (keepSameIndex, decrementIndex) =
             answers
                 |> Dict.remove answerIndex
@@ -177,12 +187,12 @@ updateOptRadioDuringDelete slideIndex questionIndex answerIndex originalOptRadio
             , Dict.foldl (\i _ d -> Dict.insert i (getThisCandorAnswer (i - 1)) d) Dict.empty decrementIndex
             ]
     in
-    matchAnswerIndexToUpdatedOptRadio originalOptRadio updatedOptRadios
+    matchAnswerIndexToUpdatedOptRadio optRadio updatedOptRadios
 
-updateOptRadioDuringFlip : Int -> Int -> Int -> ProjectHelpers.IndexAdjustment -> OptRadio -> Dict Int b -> OptRadio
-updateOptRadioDuringFlip slideIndex questionIndex answerIndex adjustment originalOptRadio answers =
+updateOptRadioDuringFlip : Model -> Int -> ProjectHelpers.IndexAdjustment -> OptRadio
+updateOptRadioDuringFlip ( { answers, optRadio } as model ) answerIndex adjustment =
     let
-        getThisCandorAnswer = getOptRadio slideIndex questionIndex
+        getThisCandorAnswer = getOptRadio model
         otherAnswerIndex = ProjectHelpers.adjustIndex adjustment answerIndex
         updatedOptRadios = List.foldl Dict.union Dict.empty
             [ Dict.singleton answerIndex (getThisCandorAnswer otherAnswerIndex)
@@ -193,12 +203,12 @@ updateOptRadioDuringFlip slideIndex questionIndex answerIndex adjustment origina
                 |> Dict.foldl (\i _ d -> Dict.insert i (getThisCandorAnswer i) d) Dict.empty
             ]
     in
-    matchAnswerIndexToUpdatedOptRadio originalOptRadio updatedOptRadios
+    matchAnswerIndexToUpdatedOptRadio optRadio updatedOptRadios
 
-updateOptRadioDuringMove : Int -> Int -> Int -> ProjectHelpers.IndexAdjustment -> Int -> OptRadio -> Dict Int b -> OptRadio
-updateOptRadioDuringMove slideIndex questionIndex answerIndex adjustment finalIndex originalOptRadio answers =
+updateOptRadioDuringMove : Model -> Int -> ProjectHelpers.IndexAdjustment -> Int -> OptRadio
+updateOptRadioDuringMove ( { answers, optRadio } as model ) answerIndex adjustment finalIndex =
     let
-        getThisCandorAnswer = getOptRadio slideIndex questionIndex
+        getThisCandorAnswer = getOptRadio model
         (beforeIndex, afterIndex) =
             answers
                 |> Dict.remove answerIndex
@@ -209,24 +219,28 @@ updateOptRadioDuringMove slideIndex questionIndex answerIndex adjustment finalIn
             case adjustment of
                 ProjectHelpers.Increment ->
                     adjustFnc
+
                 ProjectHelpers.Decrement ->
                     identityFnc
+
         afterFnc =
             case adjustment of
                 ProjectHelpers.Increment ->
                     identityFnc
+
                 ProjectHelpers.Decrement ->
                     adjustFnc
+
         updatedOptRadios = List.foldl Dict.union Dict.empty
             [ Dict.singleton answerIndex (getThisCandorAnswer finalIndex)
             , Dict.foldl beforeFnc Dict.empty beforeIndex
             , Dict.foldl afterFnc Dict.empty afterIndex
             ]
     in
-    matchAnswerIndexToUpdatedOptRadio originalOptRadio updatedOptRadios
+    matchAnswerIndexToUpdatedOptRadio optRadio updatedOptRadios
 
 update : Msg -> Model -> (Model, Cmd Msg)
-update msg ( { slideIndex, questionIndex, optRadio, answers } as model ) =
+update msg ( { slideIndex, questionIndex, answers } as model ) =
     let
         establishIndexesFnc = establishAnswerIndexes slideIndex questionIndex
     in
@@ -236,11 +250,11 @@ update msg ( { slideIndex, questionIndex, optRadio, answers } as model ) =
             , Cmd.none
             )
 
-        Delete index ->
+        Delete answerIndex ->
             (
                 { model
-                    | answers = ProjectHelpers.deleteEntry index establishIndexesFnc answers
-                    , optRadio = updateOptRadioDuringDelete slideIndex questionIndex index optRadio answers
+                    | answers = ProjectHelpers.deleteEntry answerIndex establishIndexesFnc answers
+                    , optRadio = updateOptRadioDuringDelete model answerIndex
                 }
                 , Cmd.none
             )
@@ -251,8 +265,7 @@ update msg ( { slideIndex, questionIndex, optRadio, answers } as model ) =
                     index ProjectHelpers.Increment 0
                     establishIndexesFnc answers
                 updatedOptRadio = updateOptRadioDuringMove
-                    slideIndex questionIndex index ProjectHelpers.Increment 0
-                    optRadio answers
+                    model index ProjectHelpers.Increment 0
             in
             (
                 { model
@@ -262,22 +275,22 @@ update msg ( { slideIndex, questionIndex, optRadio, answers } as model ) =
                 , Cmd.none
             )
 
-        Move index ProjectHelpers.Up ->
+        Move answerIndex ProjectHelpers.Up ->
             (
                 { model
                     | answers = ProjectHelpers.flipAdjacentEntries
-                        index ProjectHelpers.Decrement establishIndexesFnc answers
-                    , optRadio = updateOptRadioDuringFlip slideIndex questionIndex index ProjectHelpers.Decrement optRadio answers
+                        answerIndex ProjectHelpers.Decrement establishIndexesFnc answers
+                    , optRadio = updateOptRadioDuringFlip model answerIndex ProjectHelpers.Decrement
                 }
                 , Cmd.none
             )
 
-        Move index ProjectHelpers.Down ->
+        Move answerIndex ProjectHelpers.Down ->
             (
                 { model
                     | answers = ProjectHelpers.flipAdjacentEntries
-                        index ProjectHelpers.Increment establishIndexesFnc answers
-                    , optRadio = updateOptRadioDuringFlip slideIndex questionIndex index ProjectHelpers.Increment optRadio answers
+                        answerIndex ProjectHelpers.Increment establishIndexesFnc answers
+                    , optRadio = updateOptRadioDuringFlip model answerIndex ProjectHelpers.Increment
                 }
                 , Cmd.none
             )
@@ -289,8 +302,7 @@ update msg ( { slideIndex, questionIndex, optRadio, answers } as model ) =
                     index ProjectHelpers.Decrement finalIndex
                     establishIndexesFnc answers
                 updatedOptRadio = updateOptRadioDuringMove
-                    slideIndex questionIndex index ProjectHelpers.Decrement finalIndex
-                    optRadio answers
+                    model index ProjectHelpers.Decrement finalIndex
             in
             (
                 { model
@@ -361,11 +373,11 @@ viewDeleteButton index numberAnswers =
         ]
         [ text "Delete This Answer" ]
 
-viewIsCorrectRadioButton : Int -> Int -> Int -> OptRadio -> Html Msg
-viewIsCorrectRadioButton slideIndex questionIndex answerIndex correctAnswer =
+viewIsCorrectRadioButton : Model -> Int -> Html Msg
+viewIsCorrectRadioButton ( { optRadio } as model ) answerIndex =
     let
-        nameValue = getCandorAnswerHeader slideIndex questionIndex
-        idValue = getCandorAnswer slideIndex questionIndex answerIndex
+        nameValue = getCandorAnswerHeader model
+        idValue = getCandorAnswer model answerIndex
     in
     label
         [ for idValue ]
@@ -375,15 +387,16 @@ viewIsCorrectRadioButton slideIndex questionIndex answerIndex correctAnswer =
                 , id idValue
                 , name nameValue
                 , value idValue
-                , checked (correctAnswer == (OptRadio idValue))
+                , checked (optRadio == (OptRadio idValue))
                 ]
                 [ ]
             , text "is Correct?"
         ]
 
-viewAnswerTableRowEntry : Int -> OptRadio -> Int -> Int -> Int -> Answer -> List (Html Msg) -> List (Html Msg)
-viewAnswerTableRowEntry numberAnswers correctAnswer slideIndex questionIndex answerIndex answer l =
+viewAnswerTableRowEntry : Model -> Int -> Answer -> List (Html Msg) -> List (Html Msg)
+viewAnswerTableRowEntry ( { answers } as model ) answerIndex answer l =
     let
+        numberAnswers = Dict.size answers
         entry =
             tr
                 [ ]
@@ -392,7 +405,7 @@ viewAnswerTableRowEntry numberAnswers correctAnswer slideIndex questionIndex ans
                 , viewMoveAnswerDownButton answerIndex numberAnswers
                 , viewMoveAnswerBottomButton answerIndex numberAnswers
                 , viewDeleteButton answerIndex numberAnswers
-                , viewIsCorrectRadioButton slideIndex questionIndex answerIndex correctAnswer
+                , viewIsCorrectRadioButton model answerIndex
                 , input
                     [ type_ "text"
                     , value (answerToString answer)
@@ -404,8 +417,8 @@ viewAnswerTableRowEntry numberAnswers correctAnswer slideIndex questionIndex ans
     List.append l (List.singleton entry)
 
 viewAnswersTable : Model -> Html Msg
-viewAnswersTable { slideIndex, questionIndex, optRadio, answers } =
-    Dict.foldl (viewAnswerTableRowEntry (Dict.size answers) optRadio slideIndex questionIndex) [ ] answers
+viewAnswersTable ( { answers } as model ) =
+    Dict.foldl (viewAnswerTableRowEntry model) [ ] answers
         |> table [ class "edit-page-answers-table" ]
 
 view : Model -> Html Msg

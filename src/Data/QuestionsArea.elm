@@ -41,15 +41,15 @@ encodeQuestionsArea { questionIndex, questions } =
         , ( "questions", questions |> Dict.values |> Encode.list Question.encodeQuestion )
         ]
 
-init : (Model, Cmd Msg)
-init =
+init : { slideIndex : Int } -> (Model, Cmd Msg)
+init ( { slideIndex } ) =
     let
         (questionModel, questionCommands) =
-            Question.init { questionIndex = 0, slideIndex = 0 }
+            Question.init { questionIndex = 0, slideIndex = slideIndex }
     in
     (
         { questionIndex = 0
-        , slideIndex = 0
+        , slideIndex = slideIndex
         , questions = Dict.singleton 0 questionModel
         }
         , Cmd.map (QuestionMsg 0) questionCommands

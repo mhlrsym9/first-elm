@@ -59,13 +59,13 @@ type Msg =
     | SlideMsg Slide.Msg
 
 createNewSlide : Int -> (Dict Int Slide.Model, Cmd Msg)
-createNewSlide index =
+createNewSlide slideIndex =
     let
         (newSlide, slideCommands) =
-            Slide.init
-        updatedSlide = Slide.establishIndexes index newSlide
+            Slide.init { slideIndex = slideIndex }
+        updatedSlide = Slide.establishIndexes slideIndex newSlide
     in
-    (Dict.singleton index updatedSlide, Cmd.map SlideMsg slideCommands)
+    (Dict.singleton slideIndex updatedSlide, Cmd.map SlideMsg slideCommands)
 
 insertSlideAtSlicePoint : Int -> Model -> (Model, Cmd Msg)
 insertSlideAtSlicePoint slicePoint ( { slides } as model ) =
