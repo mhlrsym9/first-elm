@@ -11,8 +11,8 @@ import Html exposing (Html)
 type alias Model =
     Edit.Model
 
-init : { key : Navigation.Key, kcc : String, lcc : String, pn : String } -> (Model, Cmd Msg)
-init { key, kcc, lcc, pn } =
+init : { key : Navigation.Key, kcc : String, lcc : String, pn : String, sen : String } -> (Model, Cmd Msg)
+init { key, kcc, lcc, pn, sen } =
     let
         (projectModel, projectCommands) = Project.init
         (editModel, editCommands) = Edit.init { key = key, kcc = kcc, lcc = lcc, pn = pn, model = Api.Loaded projectModel }

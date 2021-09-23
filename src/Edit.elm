@@ -1,4 +1,4 @@
-module Edit exposing (getProjectModel, Model, Modified(..), Msg(..), init, update, urlPath, view)
+module Edit exposing (getProjectModel, Model, Modified(..), Msg(..), init, processDirtyMessage, update, urlPath, view)
 
 import Api
 import Browser.Navigation as Navigation
@@ -32,7 +32,7 @@ type alias Model =
 type alias SaveResult =
     { id : String }
 
-init : { key : Navigation.Key, kcc : String, lcc : String, pn : String, model : Api.Status Project.Model} -> (Model, Cmd Msg)
+init : { key : Navigation.Key, kcc : String, lcc : String, pn : String, model : Api.Status Project.Model } -> (Model, Cmd Msg)
 init { key, kcc, lcc, pn, model } =
     (
         { project = Clean model
@@ -73,6 +73,7 @@ type Msg =
     | PassedSlowSaveThreshold
     | ProjectMsg Project.Msg
     | Save
+    | UpdateDirtyState Bool
 
 saveProjectDecoder : Decoder SaveResult
 saveProjectDecoder =
@@ -102,12 +103,26 @@ saveProject json =
         , timeout = Nothing
         }
 
+processDirtyMessage : Bool -> Cmd Msg
+processDirtyMessage isDirty =
+    Task.perform UpdateDirtyState (Task.succeed isDirty)
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg ( { knownContentCode, learningContentCode, projectName, project } as model ) =
     case msg of
         Cancel ->
             ( model, Navigation.pushUrl model.navigationKey (Routes.routeToUrl Routes.Home) )
+
+        CompletedProjectSave _ ->
+            case project of
+                Dirty p ->
+                    ( { model | project = Clean p }, Cmd.none )
+
+                _ ->
+                    ( model, Cmd.none )
+
+        PassedSlowSaveThreshold ->
+            ( model, Cmd.none )
 
         ProjectMsg projectMsg ->
             case project of
@@ -147,17 +162,23 @@ update msg ( { knownContentCode, learningContentCode, projectName, project } as 
                 _ ->
                     ( model, Cmd.none )
 
-        CompletedProjectSave _ ->
-            case project of
-                Dirty p ->
-                    ( { model | project = Clean p }, Cmd.none )
+        UpdateDirtyState state ->
+            case state of
+                True ->
+                    case project of
+                        Clean p ->
+                            ( { model | project = Dirty p }, Cmd.none )
 
-                _ ->
-                    ( model, Cmd.none )
+                        _ ->
+                            ( model, Cmd.none )
 
-        PassedSlowSaveThreshold ->
-            ( model, Cmd.none )
+                False ->
+                    case project of
+                        Dirty p ->
+                            ( { model | project = Clean p }, Cmd.none )
 
+                        _ ->
+                            ( model, Cmd.none )
 
 viewEditPageInfo : Model -> Html Msg
 viewEditPageInfo { knownContentCode, learningContentCode, projectName } =
@@ -183,18 +204,19 @@ viewEditPageInfo { knownContentCode, learningContentCode, projectName } =
 
 viewSaveButton : Model -> Html Msg
 viewSaveButton { project } =
-    case project of
-        Dirty _ ->
-            button
-                [ onClick Save
-                , disabled False ]
-                [ text "Save Project" ]
+    let
+        disabledState =
+            case project of
+                Dirty _ ->
+                    False
 
-        _ ->
-            button
-                [ onClick Save
-                , disabled True ]
-                [ text "Save Project" ]
+                _ ->
+                    True
+    in
+    button
+        [ onClick Save
+        , disabled disabledState ]
+        [ text "Save Project" ]
 
 viewActionButtons : Model -> Html Msg
 viewActionButtons model =

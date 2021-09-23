@@ -1,10 +1,10 @@
 module Data.Slide exposing (encodeSlide, establishIndexes, init, Model, Msg, slideDecoder, textToString, update, updateSlideIndex, view)
 
 import Data.QuestionsArea as QuestionsArea
-import Html exposing (Html, div, text, textarea)
-import Html.Attributes exposing (class)
-import Html.Events exposing (onInput)
-import Json.Decode exposing (Decoder, field, map, string, succeed)
+import Html exposing (Html, text)
+import Html.Attributes exposing (attribute)
+import Html.Keyed as Keyed
+import Json.Decode exposing (Decoder, field, string, succeed)
 import Json.Decode.Pipeline exposing (custom, hardcoded, required)
 import Json.Encode as Encode
 
@@ -36,7 +36,7 @@ encodeSlide { slideText, questionsArea } =
 
 slideTextDecoder : Decoder Text
 slideTextDecoder =
-    map Text (field "slide" string)
+    Json.Decode.map Text (field "slide" string)
 
 textToString : Text -> String
 textToString (Text val) =
@@ -76,11 +76,10 @@ establishIndexes slideIndex ( { questionsArea } as model ) =
 
 type Msg =
     QuestionsAreaMsg QuestionsArea.Msg
-    | Update String
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg ( { questionsArea } as model ) =
-    case msg of
+    case Debug.log "updateSlide" msg of
         QuestionsAreaMsg questionsAreaMsg ->
             let
                 (updatedQuestionsAreaModel, questionsAreaCmds) =
@@ -89,20 +88,32 @@ update msg ( { questionsArea } as model ) =
             ( { model | questionsArea = updatedQuestionsAreaModel }
             , Cmd.map QuestionsAreaMsg questionsAreaCmds )
 
-        Update s ->
-            ( { model | slideText = Text s }, Cmd.none )
-
 -- VIEW
 
+viewTinyMCEEditor : Model -> (String, Html Msg)
+viewTinyMCEEditor { slideText, slideIndex } =
+    ( "tinymce-editor-" ++ (String.fromInt slideIndex)
+    , Html.node "tinymce-editor"
+        [ attribute "api-key" "no-api-key"
+        , attribute "height" "500"
+        , attribute "plugins" "link image code"
+        , attribute "toolbar" "undo redo | bold italic | alignleft aligncenter alignright | code | help"
+        , attribute "setup" "setupEditor"
+        ]
+        [ text (textToString slideText) ]
+    )
+
+viewQuestionsArea : Model -> (String, Html Msg)
+viewQuestionsArea { slideIndex, questionsArea } =
+    ( "candor-question-area-" ++ (String.fromInt slideIndex)
+    , QuestionsArea.view questionsArea
+        |> Html.map QuestionsAreaMsg
+    )
+
 view : Model -> Html Msg
-view { slideText, questionsArea } =
-    div
+view model =
+    Keyed.node "div"
         [ ]
-        [ textarea
-            [ class "edit-page-slide"
-            , onInput Update
-            ]
-            [ text (textToString slideText) ]
-        , QuestionsArea.view questionsArea
-            |> Html.map QuestionsAreaMsg
+        [ viewTinyMCEEditor model
+        , viewQuestionsArea model
         ]

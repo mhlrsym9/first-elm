@@ -53,6 +53,11 @@ img {
   columns: 2 200px;
 }
 
+.edit-page-slide {
+  width: 600px;
+  height: 200px;
+}
+
 .edit-page-questions-table {
   margin-left: auto;
   margin-right: auto;

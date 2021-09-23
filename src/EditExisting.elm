@@ -15,8 +15,8 @@ import Url.Builder as Builder
 type alias Model =
     Edit.Model
 
-init : { key : Navigation.Key, kcc : String, lcc : String, pn : String }-> (Model, Cmd Msg)
-init { key, kcc, lcc, pn } =
+init : { key : Navigation.Key, kcc : String, lcc : String, pn : String, sen : String }-> (Model, Cmd Msg)
+init { key, kcc, lcc, pn, sen } =
     let
         ( editModel, editMsg ) =
             Edit.init { key = key, kcc = kcc, lcc = lcc, pn = pn, model = Api.Loading }

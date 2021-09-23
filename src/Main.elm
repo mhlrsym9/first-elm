@@ -1,4 +1,4 @@
-module Main exposing (..)
+port module Main exposing (..)
 
 import Api
 import Browser exposing (Document, UrlRequest)
@@ -18,6 +18,15 @@ import Start
 import Task exposing (Task)
 import Url exposing (Url)
 
+---- PORTS ----
+
+port dirtyReceived : (Bool -> msg) -> Sub msg
+
+---- SUBSCRIPTIONS ----
+
+subscriptions : Model -> Sub Msg
+subscriptions _ =
+    dirtyReceived Dirty
 
 ---- MODEL ----
 
@@ -32,20 +41,22 @@ type alias Model =
     { page : Page
     , languages : Api.Status LanguageSelect.Languages
     , navigationKey : Navigation.Key
+    , setupEditorName : String
     }
 
-initialModel : Navigation.Key -> Model
-initialModel navigationKey =
+initialModel : Navigation.Key -> String -> Model
+initialModel navigationKey setupEditorName =
     { page = NotFound
     , languages = Api.Loading
     , navigationKey = navigationKey
+    , setupEditorName = setupEditorName
     }
 
-init : () -> Url -> Navigation.Key -> ( Model, Cmd Msg )
-init () url navigationKey =
+init : { setupEditorName: String } -> Url -> Navigation.Key -> ( Model, Cmd Msg )
+init { setupEditorName } url navigationKey =
     let
         (model, cmd) =
-            setNewPage (Routes.match url) (initialModel navigationKey)
+            setNewPage (Routes.match url) (initialModel navigationKey setupEditorName )
     in
     ( model
     , Cmd.batch
@@ -69,14 +80,15 @@ type Msg
     | EditExistingMsg EditExisting.Msg
     | CompletedLanguageLoad (Result Http.Error LanguageSelect.Languages)
     | PassedSlowLoadThreshold
+    | Dirty Bool
 
 setNewPage : Maybe Routes.Route -> Model -> ( Model, Cmd Msg )
-setNewPage maybeRoute model =
+setNewPage maybeRoute ( { navigationKey, setupEditorName } as model ) =
     case maybeRoute of
         Just Routes.Home ->
             let
                 ( startModel, startCmd ) =
-                    Start.init model.navigationKey
+                    Start.init navigationKey
             in
             ( { model | page = Start startModel }
             , Cmd.map StartMsg startCmd )
@@ -85,7 +97,7 @@ setNewPage maybeRoute model =
             let
                 ( createModel, createCmd ) =
                     Create.init
-                        model.navigationKey <|
+                        navigationKey <|
                         case model.languages of
                             Api.Loaded languages ->
                                 languages
@@ -99,7 +111,7 @@ setNewPage maybeRoute model =
             let
                 ( openModel, openCmd ) =
                     Open.init
-                        model.navigationKey <|
+                        navigationKey <|
                         case model.languages of
                             Api.Loaded languages ->
                                 languages
@@ -114,7 +126,7 @@ setNewPage maybeRoute model =
                 Just projectName ->
                     let
                         ( editModel, editCmd ) =
-                            EditNew.init { key = model.navigationKey, kcc = k, lcc = l, pn =  projectName }
+                            EditNew.init { key = navigationKey, kcc = k, lcc = l, pn =  projectName, sen = setupEditorName }
                     in
                     ( { model | page = Edit editModel }
                     , Cmd.map EditMsg editCmd )
@@ -126,7 +138,7 @@ setNewPage maybeRoute model =
                 Just projectName ->
                     let
                         ( editModel, editCmd ) =
-                            EditExisting.init { key = model.navigationKey, kcc = k, lcc = l, pn = projectName }
+                            EditExisting.init { key = navigationKey, kcc = k, lcc = l, pn = projectName, sen = setupEditorName }
                     in
                     ( { model | page = Edit editModel }
                     , Cmd.map EditExistingMsg editCmd )
@@ -227,6 +239,12 @@ update msg model =
             in
             ( { model | languages = languages }, Cmd.none )
 
+        (Dirty isDirty, Edit _) ->
+            ( model, Cmd.map EditMsg ( Edit.processDirtyMessage isDirty ) )
+
+        (Dirty _, _) ->
+            Debug.todo "Handle Dirty"
+
 
 ---- VIEW ---
 
@@ -294,13 +312,13 @@ view model =
 ---- PROGRAM ----
 
 
-main : Program () Model Msg
+main : Program { setupEditorName: String } Model Msg
 main =
     Browser.application
         { view = view
         , init = init
         , update = update
-        , subscriptions = always Sub.none
+        , subscriptions = subscriptions
         , onUrlRequest = Visit
         , onUrlChange = Routes.match >> NewRoute
         }
