@@ -16,14 +16,16 @@ type Text =
 type alias Model =
     { slideText : Text
     , slideIndex : Int
+    , setupEditorName : String
     , questionsArea : QuestionsArea.Model
     }
 
-slideDecoder : Decoder Model
-slideDecoder =
+slideDecoder : String -> Decoder Model
+slideDecoder sen =
     succeed Model
         |> custom slideTextDecoder
         |> hardcoded 0
+        |> hardcoded sen
         |> required "questionsarea" QuestionsArea.questionsAreaDecoder
 
 encodeSlide : Model -> Encode.Value
@@ -42,15 +44,16 @@ textToString : Text -> String
 textToString (Text val) =
     val
 
-init : { slideIndex : Int } -> (Model, Cmd Msg)
-init ( { slideIndex } as flags ) =
+init : { slideIndex : Int, sen : String } -> (Model, Cmd Msg)
+init { slideIndex, sen } =
     let
         (questionsArea, commands) =
-            QuestionsArea.init flags
+            QuestionsArea.init { slideIndex = slideIndex }
     in
     (
         { slideText = Text "This is a test"
         , slideIndex = slideIndex
+        , setupEditorName = sen
         , questionsArea = questionsArea
         }
         , Cmd.map QuestionsAreaMsg commands
@@ -79,7 +82,7 @@ type Msg =
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg ( { questionsArea } as model ) =
-    case Debug.log "updateSlide" msg of
+    case msg of
         QuestionsAreaMsg questionsAreaMsg ->
             let
                 (updatedQuestionsAreaModel, questionsAreaCmds) =
@@ -91,14 +94,14 @@ update msg ( { questionsArea } as model ) =
 -- VIEW
 
 viewTinyMCEEditor : Model -> (String, Html Msg)
-viewTinyMCEEditor { slideText, slideIndex } =
+viewTinyMCEEditor { slideText, slideIndex, setupEditorName } =
     ( "tinymce-editor-" ++ (String.fromInt slideIndex)
     , Html.node "tinymce-editor"
         [ attribute "api-key" "no-api-key"
         , attribute "height" "500"
         , attribute "plugins" "link image code"
         , attribute "toolbar" "undo redo | bold italic | alignleft aligncenter alignright | code | help"
-        , attribute "setup" "setupEditor"
+        , attribute "setup" setupEditorName
         ]
         [ text (textToString slideText) ]
     )

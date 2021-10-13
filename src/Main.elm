@@ -56,7 +56,7 @@ init : { setupEditorName: String } -> Url -> Navigation.Key -> ( Model, Cmd Msg 
 init { setupEditorName } url navigationKey =
     let
         (model, cmd) =
-            setNewPage (Routes.match url) (initialModel navigationKey setupEditorName )
+            setNewPage (Routes.match url) (initialModel navigationKey setupEditorName)
     in
     ( model
     , Cmd.batch
@@ -165,6 +165,7 @@ update msg model =
 
         ( StartMsg _, _ ) ->
             Debug.todo "Handle StartMsg error case"
+
 
         ( CreateMsg createMsg, Create createModel ) ->
             let

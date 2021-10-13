@@ -14,32 +14,34 @@ import Json.Encode as Encode
 
 type alias Model =
     { slideIndex : Int
+    , setupEditorName : String
     , slides : Dict Int Slide.Model
     }
 
-slideDecoder : Int -> Decoder (Int, Slide.Model)
-slideDecoder index =
-    Slide.slideDecoder
+slideDecoder : String -> Int -> Decoder (Int, Slide.Model)
+slideDecoder sen index =
+    Slide.slideDecoder sen
         |> Json.Decode.map (\s -> (index, s))
 
-slidesDecoder : Decoder (Dict Int Slide.Model)
-slidesDecoder =
-    (indexedList slideDecoder)
+slidesDecoder : String -> Decoder (Dict Int Slide.Model)
+slidesDecoder sen =
+    (indexedList (slideDecoder sen))
         |> Json.Decode.map (\l -> Dict.fromList l)
 
-projectDecoder : Decoder Model
-projectDecoder =
+projectDecoder : String -> Decoder Model
+projectDecoder sen =
     succeed Model
         |> hardcoded 0
-        |> required "slides" slidesDecoder
+        |> hardcoded sen
+        |> required "slides" (slidesDecoder sen)
 
 encodeProject : Model -> Encode.Value
 encodeProject { slides } =
     slides |> Dict.values |> Encode.list Slide.encodeSlide
 
-init : (Model, Cmd Msg)
-init =
-    ( { slideIndex = 0, slides = Dict.empty }, Cmd.none )
+init : String -> (Model, Cmd Msg)
+init sen =
+    ( { slideIndex = 0, slides = Dict.empty, setupEditorName = sen }, Cmd.none )
 
 updateSlideIndexes : Dict Int Slide.Model -> Dict Int Slide.Model
 updateSlideIndexes slides =
@@ -58,19 +60,19 @@ type Msg =
     | Move ProjectHelpers.Direction
     | SlideMsg Slide.Msg
 
-createNewSlide : Int -> (Dict Int Slide.Model, Cmd Msg)
-createNewSlide slideIndex =
+createNewSlide : Int -> String -> (Dict Int Slide.Model, Cmd Msg)
+createNewSlide slideIndex sen =
     let
         (newSlide, slideCommands) =
-            Slide.init { slideIndex = slideIndex }
+            Slide.init { slideIndex = slideIndex, sen = sen }
     in
     (Dict.singleton slideIndex newSlide, Cmd.map SlideMsg slideCommands)
 
 insertSlideAtSlicePoint : Int -> Model -> (Model, Cmd Msg)
-insertSlideAtSlicePoint slicePoint ( { slides } as model ) =
+insertSlideAtSlicePoint slicePoint ( { slides, setupEditorName } as model ) =
     let
         (beforeSlides, afterSlides) = Dict.partition (\i _ -> (i < slicePoint)) slides
-        (newSlides, commands) = createNewSlide slicePoint
+        (newSlides, commands) = createNewSlide slicePoint setupEditorName
         updatedSlides =
             afterSlides
                 |> Dict.Extra.mapKeys (\k -> k + 1)

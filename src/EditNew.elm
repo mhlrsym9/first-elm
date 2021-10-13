@@ -14,7 +14,7 @@ type alias Model =
 init : { key : Navigation.Key, kcc : String, lcc : String, pn : String, sen : String } -> (Model, Cmd Msg)
 init { key, kcc, lcc, pn, sen } =
     let
-        (projectModel, projectCommands) = Project.init
+        (projectModel, projectCommands) = Project.init sen
         (editModel, editCommands) = Edit.init { key = key, kcc = kcc, lcc = lcc, pn = pn, model = Api.Loaded projectModel }
     in
     ( editModel

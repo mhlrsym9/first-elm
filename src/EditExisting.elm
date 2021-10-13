@@ -24,14 +24,14 @@ init { key, kcc, lcc, pn, sen } =
     ( editModel
     , Cmd.batch
         [ Cmd.map EditMsg editMsg
-        , (fetchProject kcc lcc pn)
+        , (fetchProject kcc lcc pn sen)
             |> Task.attempt CompletedProjectLoad
         , Task.perform (\_ -> PassedSlowLoadThreshold) Loading.slowThreshold
         ]
     )
 
-fetchProject : String -> String -> String -> Task Http.Error Project.Model
-fetchProject k l p =
+fetchProject : String -> String -> String -> String -> Task Http.Error Project.Model
+fetchProject k l p sen =
     let
         url = Builder.relative [Edit.urlPath, "read", k, l, p] []
     in
@@ -40,7 +40,7 @@ fetchProject k l p =
         , headers = []
         , url = url
         , body = Http.emptyBody
-        , resolver = stringResolver (Api.handleJsonResponse Project.projectDecoder)
+        , resolver = stringResolver ( Api.handleJsonResponse ( Project.projectDecoder sen ) )
         , timeout = Nothing
         }
 
@@ -73,7 +73,7 @@ update msg model =
             , Cmd.none )
 
         CompletedProjectLoad result ->
-            case Debug.log "decodedProject" result of
+            case result of
                 Ok project ->
                     let
                         updatedProject = Project.establishIndexes project
