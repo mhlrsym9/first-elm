@@ -4,6 +4,7 @@ import Api
 import Browser exposing (Document, UrlRequest)
 import Browser.Navigation as Navigation
 import Create
+import Data.Project as Project
 import Edit
 import EditExisting
 import EditNew
@@ -30,12 +31,12 @@ port mceEditorSubscription : (String -> msg) -> Sub msg
 
 ---- PROCEDURES ----
 
-syncMceEditorProcedure : Int -> Cmd Msg
-syncMceEditorProcedure slideIndex =
+syncMceEditorProcedure : Project.Msg -> Cmd Msg
+syncMceEditorProcedure nextMsg =
     Channel.open (\_ -> syncMceEditor () )
         |> Channel.connect mceEditorSubscription
         |> Channel.acceptOne
-        |> Procedure.run ProcMsg (ReceivedMceEditorMessage slideIndex)
+        |> Procedure.run ProcMsg (ReceivedMceEditorMessage nextMsg)
 
 ---- SUBSCRIPTIONS ----
 
@@ -101,7 +102,7 @@ type Msg
     | OpenMsg Open.Msg
     | PassedSlowLoadThreshold
     | ProcMsg (Procedure.Program.Msg Msg)
-    | ReceivedMceEditorMessage Int String
+    | ReceivedMceEditorMessage Project.Msg String
     | StartMsg Start.Msg
     | Visit UrlRequest
 
@@ -171,6 +172,16 @@ setNewPage maybeRoute ( { navigationKey, setupEditorName } as model ) =
         Nothing ->
             ( { model | page = NotFound }, Cmd.none )
 
+updateEdit : Edit.Msg -> Edit.Model -> Model -> ( Model, Cmd Msg )
+updateEdit editMsg editModel model =
+    let
+        ( updatedEditModel, editCmd ) =
+            Edit.update editMsg editModel
+    in
+    ( { model | page = Edit updatedEditModel }
+    , Cmd.map EditMsg editCmd
+    )
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case ( msg, model.page ) of
@@ -219,13 +230,17 @@ update msg model =
             Debug.todo "Handle EditExistingMsg error case"
 
         ( EditMsg editMsg, Edit editModel ) ->
-            let
-                ( updatedEditModel, editCmd ) =
-                    Edit.update editMsg editModel
-            in
-            ( { model | page = Edit updatedEditModel }
-            , Cmd.map EditMsg editCmd
-            )
+            case editMsg of
+                Edit.ProjectMsg projectMsg ->
+                    case projectMsg of
+                        Project.UpdateCurrentSlideContents nextMsg ->
+                            ( model, syncMceEditorProcedure nextMsg )
+
+                        _ ->
+                            updateEdit editMsg editModel model
+
+                _ ->
+                    updateEdit editMsg editModel model
 
         ( EditMsg _, _ ) ->
             Debug.todo "Handle EditMsg error case"
@@ -275,10 +290,10 @@ update msg model =
             Procedure.Program.update pMsg model.procModel
                 |> Tuple.mapFirst (\updated -> { model | procModel = updated })
 
-        ( ReceivedMceEditorMessage slideIndex slideContents, Edit editModel ) ->
+        ( ReceivedMceEditorMessage nextMsg slideContents, Edit editModel ) ->
             let
                 ( updatedEditModel, editCmd ) =
-                    Edit.storeSlideContents slideIndex slideContents editModel
+                    Edit.storeSlideContents nextMsg slideContents editModel
             in
             ( { model | page = Edit updatedEditModel }
             , Cmd.map EditMsg editCmd

@@ -1,4 +1,4 @@
-module Data.Project exposing (encodeProject, establishIndexes, projectDecoder, init, Model, Msg, storeSlideContents, update, view)
+module Data.Project exposing (encodeProject, establishIndexes, projectDecoder, init, Model, Msg(..), storeSlideContents, update, view)
 
 import Data.ProjectHelpers as ProjectHelpers
 import Data.Slide as Slide
@@ -83,8 +83,8 @@ insertSlideAtSlicePoint slicePoint ( { slides, setupEditorName } as model ) =
     in
     ( { model | slides = updatedSlides, slideIndex = slicePoint }, commands )
 
-storeSlideContents : Int -> String -> Model -> (Model, Cmd Msg)
-storeSlideContents nextSlideIndex slideContents ( { slideIndex, slides } as projectModel ) =
+storeSlideContents : Msg -> String -> Model -> (Model, Cmd Msg)
+storeSlideContents msg slideContents ( { slideIndex, slides } as projectModel ) =
     let
         maybeSlideModel = Dict.get slideIndex slides
     in
@@ -93,10 +93,16 @@ storeSlideContents nextSlideIndex slideContents ( { slideIndex, slides } as proj
             let
                 ( updatedSlideModel, slideMsg ) =
                     Slide.storeSlideContents slideContents slideModel
+                ( updatedProjectModel, projectCommands ) =
+                    update msg { projectModel | slides = Dict.insert slideIndex updatedSlideModel slides }
             in
-            ( { projectModel | slides = Dict.insert slideIndex updatedSlideModel slides }
-            , Cmd.map SlideMsg slideMsg
+            ( updatedProjectModel
+            , Cmd.batch
+                [ Cmd.map SlideMsg slideMsg
+                , projectCommands
+                ]
             )
+
         Nothing ->
             ( projectModel, Cmd.none )
 
@@ -241,7 +247,7 @@ viewNextSlideButton { slideIndex, slides } =
     button
         [ class "slide-button"
         , disabled ( slideIndex == (numberSlides - 1) )
-        , onClick ( DisplaySlide ( slideIndex + 1 ) )
+        , onClick (UpdateCurrentSlideContents ( DisplaySlide ( slideIndex + 1 ) ) )
         ]
         [ text "Next ->" ]
 
@@ -296,7 +302,7 @@ viewInsertAfterSlideButton : Html Msg
 viewInsertAfterSlideButton =
     button
         [ class "slide-button"
-        , onClick (InsertSlide ProjectHelpers.Down)
+        , onClick (UpdateCurrentSlideContents (InsertSlide ProjectHelpers.Down) )
         ]
         [ text "Add new slide after this slide ->"]
 

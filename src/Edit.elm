@@ -1,4 +1,4 @@
-module Edit exposing (getProjectModel, Model, Modified(..), Msg, init, initNewProject, processDirtyMessage, storeSlideContents, update, urlPath, view)
+module Edit exposing (getProjectModel, Model, Modified(..), Msg(..), init, initNewProject, processDirtyMessage, storeSlideContents, update, urlPath, view)
 
 import Api
 import Browser.Navigation as Navigation
@@ -130,13 +130,13 @@ processDirtyMessage ( { project } as model ) isDirty =
                 _ ->
                     ( model, Cmd.none )
 
-storeSlideContents : Int -> String -> Model -> (Model, Cmd Msg)
-storeSlideContents slideIndex slideContents ( { project } as model ) =
+storeSlideContents : Project.Msg -> String -> Model -> (Model, Cmd Msg)
+storeSlideContents msg slideContents ( { project } as model ) =
     case project of
         Dirty (Api.Loaded projectModel) ->
             let
                 (updatedProject, projectCmd) =
-                    Project.storeSlideContents slideIndex slideContents projectModel
+                    Project.storeSlideContents msg slideContents projectModel
             in
             ( { model | project = Dirty (Api.Loaded updatedProject) }
             , Cmd.map ProjectMsg projectCmd
@@ -145,7 +145,7 @@ storeSlideContents slideIndex slideContents ( { project } as model ) =
         Clean (Api.Loaded projectModel) ->
             let
                 (updatedProject, projectCmd) =
-                    Project.storeSlideContents slideIndex slideContents projectModel
+                    Project.storeSlideContents msg slideContents projectModel
             in
             ( { model | project = Clean (Api.Loaded updatedProject) }
             , Cmd.map ProjectMsg projectCmd

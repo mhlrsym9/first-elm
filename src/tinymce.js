@@ -2,7 +2,11 @@ import {app} from "./index.js";
 
 // TinyMCE setup attribute needs to refer to a function in the global namespace, outside
 // of any module. Therefore, create the function as a property of the global window object...
+
+var currentEditor = null;
+
 window.setupEditor = function(editor) {
+    currentEditor = editor;
     editor.on('dirty', handleDirty);
 };
 
@@ -24,5 +28,9 @@ function handleDirty() {
     app.ports.dirtyReceived.send(true);
 }
 
+function extractEditorContents() {
+    app.ports.mceEditorSubscription.send(currentEditor.getContent());
+}
+
 // export { setupEditor, handleDirty };
-export { setupEditorName };
+export { setupEditorName, extractEditorContents };
