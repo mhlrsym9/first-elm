@@ -2,7 +2,6 @@ module EditNew exposing (Model, Msg, init, update, view)
 
 import Api
 import Browser.Navigation as Navigation
-import Data.Project as Project
 import Edit
 import Html exposing (Html)
 
@@ -14,25 +13,33 @@ type alias Model =
 init : { key : Navigation.Key, kcc : String, lcc : String, pn : String, sen : String } -> (Model, Cmd Msg)
 init { key, kcc, lcc, pn, sen } =
     let
-        (projectModel, projectCommands) = Project.init sen
+        (projectModel, projectCommands) = Edit.initNewProject sen
         (editModel, editCommands) = Edit.init { key = key, kcc = kcc, lcc = lcc, pn = pn, model = Api.Loaded projectModel }
     in
     ( editModel
     , Cmd.batch
-        [ Cmd.map Edit.ProjectMsg projectCommands
-        , editCommands
+        [ Cmd.map EditMsg projectCommands
+        , Cmd.map EditMsg editCommands
         ]
     )
 
 -- UPDATE
 
-type alias Msg =
-    Edit.Msg
+type Msg =
+    EditMsg Edit.Msg
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
-    Edit.update msg model
+    case msg of
+        EditMsg editMsg ->
+            let
+                (updatedEditModel, editCommands) =
+                    Edit.update editMsg model
+            in
+            ( updatedEditModel
+            , Cmd.map EditMsg editCommands
+            )
 
 view : Model -> Html Msg
 view model =
-    Edit.view model
+    Html.map EditMsg (Edit.view model)

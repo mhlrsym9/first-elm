@@ -1,4 +1,4 @@
-module Data.Slide exposing (encodeSlide, establishIndexes, init, Model, Msg, slideDecoder, textToString, update, updateSlideIndex, view)
+module Data.Slide exposing (encodeSlide, establishIndexes, init, Model, Msg, slideDecoder, storeSlideContents, textToString, update, updateSlideIndex, view)
 
 import Data.QuestionsArea as QuestionsArea
 import Html exposing (Html, text)
@@ -79,6 +79,10 @@ establishIndexes slideIndex ( { questionsArea } as model ) =
 
 type Msg =
     QuestionsAreaMsg QuestionsArea.Msg
+
+storeSlideContents : String -> Model -> (Model, Cmd Msg)
+storeSlideContents slideContents model =
+    ( { model | slideText = Text slideContents }, Cmd.none )
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg ( { questionsArea } as model ) =

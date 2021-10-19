@@ -13,6 +13,9 @@ import Http exposing (Response)
 import LanguageSelect
 import Loading
 import Open
+import Procedure
+import Procedure.Channel as Channel
+import Procedure.Program
 import Routes
 import Start
 import Task exposing (Task)
@@ -20,13 +23,28 @@ import Url exposing (Url)
 
 ---- PORTS ----
 
+port syncMceEditor : () -> Cmd msg
+
 port dirtyReceived : (Bool -> msg) -> Sub msg
+port mceEditorSubscription : (String -> msg) -> Sub msg
+
+---- PROCEDURES ----
+
+syncMceEditorProcedure : Int -> Cmd Msg
+syncMceEditorProcedure slideIndex =
+    Channel.open (\_ -> syncMceEditor () )
+        |> Channel.connect mceEditorSubscription
+        |> Channel.acceptOne
+        |> Procedure.run ProcMsg (ReceivedMceEditorMessage slideIndex)
 
 ---- SUBSCRIPTIONS ----
 
 subscriptions : Model -> Sub Msg
-subscriptions _ =
-    dirtyReceived Dirty
+subscriptions model =
+    Sub.batch
+        [ dirtyReceived Dirty
+        , Procedure.Program.subscriptions model.procModel
+        ]
 
 ---- MODEL ----
 
@@ -41,6 +59,7 @@ type alias Model =
     { page : Page
     , languages : Api.Status LanguageSelect.Languages
     , navigationKey : Navigation.Key
+    , procModel : (Procedure.Program.Model Msg)
     , setupEditorName : String
     }
 
@@ -49,6 +68,7 @@ initialModel navigationKey setupEditorName =
     { page = NotFound
     , languages = Api.Loading
     , navigationKey = navigationKey
+    , procModel = Procedure.Program.init
     , setupEditorName = setupEditorName
     }
 
@@ -71,16 +91,19 @@ init { setupEditorName } url navigationKey =
 
 
 type Msg
-    = NewRoute (Maybe Routes.Route)
-    | Visit UrlRequest
-    | StartMsg Start.Msg
+    = CompletedLanguageLoad (Result Http.Error LanguageSelect.Languages)
     | CreateMsg Create.Msg
-    | OpenMsg Open.Msg
-    | EditMsg Edit.Msg
-    | EditExistingMsg EditExisting.Msg
-    | CompletedLanguageLoad (Result Http.Error LanguageSelect.Languages)
-    | PassedSlowLoadThreshold
     | Dirty Bool
+    | EditExistingMsg EditExisting.Msg
+    | EditMsg Edit.Msg
+    | EditNewMsg EditNew.Msg
+    | NewRoute (Maybe Routes.Route)
+    | OpenMsg Open.Msg
+    | PassedSlowLoadThreshold
+    | ProcMsg (Procedure.Program.Msg Msg)
+    | ReceivedMceEditorMessage Int String
+    | StartMsg Start.Msg
+    | Visit UrlRequest
 
 setNewPage : Maybe Routes.Route -> Model -> ( Model, Cmd Msg )
 setNewPage maybeRoute ( { navigationKey, setupEditorName } as model ) =
@@ -129,7 +152,7 @@ setNewPage maybeRoute ( { navigationKey, setupEditorName } as model ) =
                             EditNew.init { key = navigationKey, kcc = k, lcc = l, pn =  projectName, sen = setupEditorName }
                     in
                     ( { model | page = Edit editModel }
-                    , Cmd.map EditMsg editCmd )
+                    , Cmd.map EditNewMsg editCmd )
                 Nothing ->
                     ( model, Cmd.none )
 
@@ -151,21 +174,13 @@ setNewPage maybeRoute ( { navigationKey, setupEditorName } as model ) =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case ( msg, model.page ) of
-        ( NewRoute maybeRoute, _ ) ->
-            setNewPage maybeRoute model
+        ( CompletedLanguageLoad result, _ ) ->
+            case result of
+                Ok languages ->
+                    ( { model | languages = Api.Loaded languages }, Cmd.none )
 
-        ( StartMsg startMsg, Start startModel ) ->
-            let
-                ( updatedStartModel, startCmd ) =
-                    Start.update startMsg startModel
-            in
-            ( { model | page = Start updatedStartModel }
-            , Cmd.map StartMsg startCmd
-            )
-
-        ( StartMsg _, _ ) ->
-            Debug.todo "Handle StartMsg error case"
-
+                Err _ ->
+                    ( { model | languages = Api.Failed }, Cmd.none )
 
         ( CreateMsg createMsg, Create createModel ) ->
             let
@@ -179,29 +194,17 @@ update msg model =
         ( CreateMsg _, _ ) ->
             Debug.todo "Handle CreateMsg error case"
 
-        ( OpenMsg openMsg, Open openModel ) ->
-            let
-                ( updatedOpenModel, openCmd ) =
-                    Open.update openMsg openModel
-            in
-            ( { model | page = Open updatedOpenModel }
-            , Cmd.map OpenMsg openCmd
-            )
-
-        ( OpenMsg _, _ ) ->
-            Debug.todo "Handle OpenMsg error case"
-
-        ( EditMsg editMsg, Edit editModel ) ->
+        ( Dirty isDirty, Edit editModel ) ->
             let
                 ( updatedEditModel, editCmd ) =
-                    Edit.update editMsg editModel
+                    Edit.processDirtyMessage editModel isDirty
             in
-            ( { model | page = Edit updatedEditModel }
-            , Cmd.map EditMsg editCmd
-            )
+                ( { model | page = Edit updatedEditModel }
+                , Cmd.map EditMsg editCmd
+                )
 
-        ( EditMsg _, _ ) ->
-            Debug.todo "Handle EditMsg error case"
+        ( Dirty _, _ ) ->
+            Debug.todo "Handle Dirty"
 
         ( EditExistingMsg editExistingMsg, Edit editModel ) ->
             let
@@ -215,16 +218,44 @@ update msg model =
         ( EditExistingMsg _, _ ) ->
             Debug.todo "Handle EditExistingMsg error case"
 
-        ( Visit _, _ ) ->
-            Debug.todo "Handle Visit"
+        ( EditMsg editMsg, Edit editModel ) ->
+            let
+                ( updatedEditModel, editCmd ) =
+                    Edit.update editMsg editModel
+            in
+            ( { model | page = Edit updatedEditModel }
+            , Cmd.map EditMsg editCmd
+            )
 
-        ( CompletedLanguageLoad result, _ ) ->
-            case result of
-                Ok languages ->
-                    ( { model | languages = Api.Loaded languages }, Cmd.none )
+        ( EditMsg _, _ ) ->
+            Debug.todo "Handle EditMsg error case"
 
-                Err _ ->
-                    ( { model | languages = Api.Failed }, Cmd.none )
+        ( EditNewMsg editMsg, Edit editModel ) ->
+            let
+                ( updatedEditModel, editCmd ) =
+                    EditNew.update editMsg editModel
+            in
+            ( { model | page = Edit updatedEditModel }
+            , Cmd.map EditNewMsg editCmd
+            )
+
+        ( EditNewMsg _, _ ) ->
+            Debug.todo "Handle EditNewMsg error case"
+
+        ( NewRoute maybeRoute, _ ) ->
+            setNewPage maybeRoute model
+
+        ( OpenMsg openMsg, Open openModel ) ->
+            let
+                ( updatedOpenModel, openCmd ) =
+                    Open.update openMsg openModel
+            in
+            ( { model | page = Open updatedOpenModel }
+            , Cmd.map OpenMsg openCmd
+            )
+
+        ( OpenMsg _, _ ) ->
+            Debug.todo "Handle OpenMsg error case"
 
         ( PassedSlowLoadThreshold, _ ) ->
             let
@@ -240,12 +271,36 @@ update msg model =
             in
             ( { model | languages = languages }, Cmd.none )
 
-        (Dirty isDirty, Edit _) ->
-            ( model, Cmd.map EditMsg ( Edit.processDirtyMessage isDirty ) )
+        ( ProcMsg pMsg, _ ) ->
+            Procedure.Program.update pMsg model.procModel
+                |> Tuple.mapFirst (\updated -> { model | procModel = updated })
 
-        (Dirty _, _) ->
-            Debug.todo "Handle Dirty"
+        ( ReceivedMceEditorMessage slideIndex slideContents, Edit editModel ) ->
+            let
+                ( updatedEditModel, editCmd ) =
+                    Edit.storeSlideContents slideIndex slideContents editModel
+            in
+            ( { model | page = Edit updatedEditModel }
+            , Cmd.map EditMsg editCmd
+            )
 
+        ( ReceivedMceEditorMessage _ _, _ ) ->
+            Debug.todo "Handle ReceivedMceEditorMessage error case"
+
+        ( StartMsg startMsg, Start startModel ) ->
+            let
+                ( updatedStartModel, startCmd ) =
+                    Start.update startMsg startModel
+            in
+            ( { model | page = Start updatedStartModel }
+            , Cmd.map StartMsg startCmd
+            )
+
+        ( StartMsg _, _ ) ->
+            Debug.todo "Handle StartMsg error case"
+
+        ( Visit _, _ ) ->
+            Debug.todo "Handle Visit"
 
 ---- VIEW ---
 

@@ -1,4 +1,4 @@
-module Edit exposing (getProjectModel, Model, Modified(..), Msg(..), init, processDirtyMessage, update, urlPath, view)
+module Edit exposing (getProjectModel, Model, Modified(..), Msg, init, initNewProject, processDirtyMessage, storeSlideContents, update, urlPath, view)
 
 import Api
 import Browser.Navigation as Navigation
@@ -44,6 +44,14 @@ init { key, kcc, lcc, pn, model } =
         , Cmd.none
     )
 
+initNewProject : String -> (Project.Model, Cmd Msg)
+initNewProject sen =
+    let
+        (projectModel, projectCommands) =
+            Project.init sen
+    in
+    ( projectModel, Cmd.map ProjectMsg projectCommands)
+
 urlPath : String
 urlPath =
     "http://192.168.34.9:8080"
@@ -73,7 +81,7 @@ type Msg =
     | PassedSlowSaveThreshold
     | ProjectMsg Project.Msg
     | Save
-    | UpdateDirtyState Bool
+    | UpdateCurrentSlideContents Msg
 
 saveProjectDecoder : Decoder SaveResult
 saveProjectDecoder =
@@ -103,9 +111,48 @@ saveProject json =
         , timeout = Nothing
         }
 
-processDirtyMessage : Bool -> Cmd Msg
-processDirtyMessage isDirty =
-    Task.perform UpdateDirtyState (Task.succeed isDirty)
+processDirtyMessage : Model -> Bool -> (Model, Cmd Msg)
+processDirtyMessage ( { project } as model ) isDirty =
+    case isDirty of
+        True ->
+            case project of
+                Clean p ->
+                    ( { model | project = Dirty p }, Cmd.none )
+
+                _ ->
+                    ( model, Cmd.none )
+
+        False ->
+            case project of
+                Dirty p ->
+                    ( { model | project = Clean p }, Cmd.none )
+
+                _ ->
+                    ( model, Cmd.none )
+
+storeSlideContents : Int -> String -> Model -> (Model, Cmd Msg)
+storeSlideContents slideIndex slideContents ( { project } as model ) =
+    case project of
+        Dirty (Api.Loaded projectModel) ->
+            let
+                (updatedProject, projectCmd) =
+                    Project.storeSlideContents slideIndex slideContents projectModel
+            in
+            ( { model | project = Dirty (Api.Loaded updatedProject) }
+            , Cmd.map ProjectMsg projectCmd
+            )
+
+        Clean (Api.Loaded projectModel) ->
+            let
+                (updatedProject, projectCmd) =
+                    Project.storeSlideContents slideIndex slideContents projectModel
+            in
+            ( { model | project = Clean (Api.Loaded updatedProject) }
+            , Cmd.map ProjectMsg projectCmd
+            )
+
+        _ ->
+            ( model, Cmd.none )
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg ( { knownContentCode, learningContentCode, projectName, project } as model ) =
@@ -162,23 +209,8 @@ update msg ( { knownContentCode, learningContentCode, projectName, project } as 
                 _ ->
                     ( model, Cmd.none )
 
-        UpdateDirtyState state ->
-            case state of
-                True ->
-                    case project of
-                        Clean p ->
-                            ( { model | project = Dirty p }, Cmd.none )
-
-                        _ ->
-                            ( model, Cmd.none )
-
-                False ->
-                    case project of
-                        Dirty p ->
-                            ( { model | project = Clean p }, Cmd.none )
-
-                        _ ->
-                            ( model, Cmd.none )
+        UpdateCurrentSlideContents _ ->
+            ( model, Cmd.none )
 
 viewEditPageInfo : Model -> Html Msg
 viewEditPageInfo { knownContentCode, learningContentCode, projectName } =

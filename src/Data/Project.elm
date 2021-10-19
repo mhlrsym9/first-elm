@@ -1,4 +1,4 @@
-module Data.Project exposing (encodeProject, establishIndexes, projectDecoder, init, Model, Msg, update, view)
+module Data.Project exposing (encodeProject, establishIndexes, projectDecoder, init, Model, Msg, storeSlideContents, update, view)
 
 import Data.ProjectHelpers as ProjectHelpers
 import Data.Slide as Slide
@@ -59,6 +59,7 @@ type Msg =
     | InsertSlide ProjectHelpers.Direction
     | Move ProjectHelpers.Direction
     | SlideMsg Slide.Msg
+    | UpdateCurrentSlideContents Msg
 
 createNewSlide : Int -> String -> (Dict Int Slide.Model, Cmd Msg)
 createNewSlide slideIndex sen =
@@ -81,6 +82,23 @@ insertSlideAtSlicePoint slicePoint ( { slides, setupEditorName } as model ) =
                 |> Dict.union beforeSlides
     in
     ( { model | slides = updatedSlides, slideIndex = slicePoint }, commands )
+
+storeSlideContents : Int -> String -> Model -> (Model, Cmd Msg)
+storeSlideContents nextSlideIndex slideContents ( { slideIndex, slides } as projectModel ) =
+    let
+        maybeSlideModel = Dict.get slideIndex slides
+    in
+    case maybeSlideModel of
+        Just slideModel ->
+            let
+                ( updatedSlideModel, slideMsg ) =
+                    Slide.storeSlideContents slideContents slideModel
+            in
+            ( { projectModel | slides = Dict.insert slideIndex updatedSlideModel slides }
+            , Cmd.map SlideMsg slideMsg
+            )
+        Nothing ->
+            ( projectModel, Cmd.none )
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg ( { slideIndex, slides } as model ) =
@@ -184,6 +202,10 @@ update msg ( { slideIndex, slides } as model ) =
 
                 Nothing ->
                     ( model, Cmd.none )
+
+        UpdateCurrentSlideContents nextMsg ->
+            ( model, Cmd.none )
+
 
 -- VIEW
 
@@ -354,7 +376,7 @@ viewDeleteSlideActionRow { slides } =
                 , disabled ( 1 == Dict.size slides )
                 , onClick DeleteSlide
                 ]
-                [ text "Delete This Slide"]
+                [ text "Delete This Slide" ]
         ]
 
 viewSlide : Maybe Slide.Model -> Html Msg
