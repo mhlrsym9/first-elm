@@ -168,27 +168,32 @@ update msg ( { knownContentCode, learningContentCode, projectName, project } as 
             ( model, Cmd.none )
 
         ProjectMsg projectMsg ->
-            case project of
-                Clean (Api.Loaded projectModel) ->
-                    let
-                        updatedProjectModel =
-                            Project.update projectMsg projectModel
-                    in
-                    ( { model | project = Dirty (Api.Loaded updatedProjectModel) }
-                    , Cmd.none
-                    )
-
-                Dirty (Api.Loaded projectModel) ->
-                    let
-                        updatedProjectModel =
-                            Project.update projectMsg projectModel
-                    in
-                    ( { model | project = Dirty (Api.Loaded updatedProjectModel) }
-                    , Cmd.none
-                    )
+            case projectMsg of
+                Project.UpdateCurrentSlideContents nextMsg ->
+                    (model, Task.perform (always (UpdateCurrentSlideContents (ProjectMsg nextMsg) ) ) (Task.succeed ()))
 
                 _ ->
-                    ( model, Cmd.none )
+                    case project of
+                        Clean (Api.Loaded projectModel) ->
+                            let
+                                updatedProjectModel =
+                                    Project.update projectMsg projectModel
+                            in
+                            ( { model | project = Dirty (Api.Loaded updatedProjectModel) }
+                            , Cmd.none
+                            )
+
+                        Dirty (Api.Loaded projectModel) ->
+                            let
+                                updatedProjectModel =
+                                    Project.update projectMsg projectModel
+                            in
+                            ( { model | project = Dirty (Api.Loaded updatedProjectModel) }
+                            , Cmd.none
+                            )
+
+                        _ ->
+                            ( model, Cmd.none )
 
         Save ->
             case project of

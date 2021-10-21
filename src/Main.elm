@@ -4,7 +4,6 @@ import Api
 import Browser exposing (Document, UrlRequest)
 import Browser.Navigation as Navigation
 import Create
-import Data.Project as Project
 import Edit
 import EditExisting
 import EditNew
@@ -230,14 +229,6 @@ update msg model =
 
         ( EditMsg editMsg, Edit editModel ) ->
             case editMsg of
-                Edit.ProjectMsg projectMsg ->
-                    case projectMsg of
-                        Project.UpdateCurrentSlideContents nextMsg ->
-                            ( model, syncMceEditorProcedure ( EditMsg ( Edit.ProjectMsg nextMsg ) ) )
-
-                        _ ->
-                            updateEdit editMsg editModel model
-
                 Edit.UpdateCurrentSlideContents nextMsg ->
                     ( model, syncMceEditorProcedure (EditMsg nextMsg) )
 
