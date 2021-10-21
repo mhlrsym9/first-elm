@@ -41,19 +41,15 @@ encodeQuestionsArea { questionIndex, questions } =
         , ( "questions", questions |> Dict.values |> Encode.list Question.encodeQuestion )
         ]
 
-init : { slideIndex : Int } -> (Model, Cmd Msg)
+init : { slideIndex : Int } -> Model
 init ( { slideIndex } ) =
     let
-        (questionModel, questionCommands) =
-            Question.init { questionIndex = 0, slideIndex = slideIndex }
+        questionModel = Question.init { questionIndex = 0, slideIndex = slideIndex }
     in
-    (
-        { questionIndex = 0
-        , slideIndex = slideIndex
-        , questions = Dict.singleton 0 questionModel
-        }
-        , Cmd.map (QuestionMsg 0) questionCommands
-    )
+    { questionIndex = 0
+    , slideIndex = slideIndex
+    , questions = Dict.singleton 0 questionModel
+    }
 
 updateQuestionIndexes : Dict Int Question.Model -> Dict Int Question.Model
 updateQuestionIndexes questions =
@@ -83,43 +79,36 @@ type Msg =
     | Move Int ProjectHelpers.Direction
     | QuestionMsg Int Question.Msg
 
-updateQuestion : Int -> Question.Msg -> Model -> (Model, Cmd Msg)
+updateQuestion : Int -> Question.Msg -> Model -> Model
 updateQuestion index questionMsg ( { questions } as model ) =
     let
         maybeQuestion = Dict.get index questions
-        (updatedModel, commands) =
+        updatedModel =
             case maybeQuestion of
                 Just question ->
                     let
-                        (updatedQuestion, questionCommands) =
-                            Question.update questionMsg question
+                        updatedQuestion = Question.update questionMsg question
                     in
-                    ( { model | questions = Dict.insert index updatedQuestion questions }
-                    , Cmd.map (QuestionMsg index) questionCommands
-                    )
+                    { model | questions = Dict.insert index updatedQuestion questions }
 
                 Nothing ->
-                    ( model, Cmd.none )
+                    model
     in
-        ( updatedModel, commands )
+    updatedModel
 
-update : Msg -> Model -> (Model, Cmd Msg)
+update : Msg -> Model -> Model
 update msg ( { slideIndex, questions } as model ) =
     case msg of
         Add ->
             let
                 position = Dict.size questions
-                (questionModel, questionCommands) =
-                    Question.init { questionIndex = position, slideIndex = slideIndex }
+                questionModel = Question.init { questionIndex = position, slideIndex = slideIndex }
+                updatedModel = { model | questions = Dict.insert (Dict.size questions) questionModel questions }
             in
-            ( { model | questions = Dict.insert (Dict.size questions) questionModel questions }
-            , Cmd.map (QuestionMsg position) questionCommands
-            )
+            updatedModel
 
         Delete index ->
-            ( { model | questions = ProjectHelpers.deleteEntry index updateQuestionIndexes questions }
-            , Cmd.none
-            )
+            { model | questions = ProjectHelpers.deleteEntry index updateQuestionIndexes questions }
 
         QuestionMsg index questionMsg ->
             updateQuestion index questionMsg model
@@ -130,27 +119,21 @@ update msg ( { slideIndex, questions } as model ) =
                     index ProjectHelpers.Increment 0
                     updateQuestionIndexes questions
             in
-            ( { model | questions = updatedQuestions }
-            , Cmd.none
-            )
+            { model | questions = updatedQuestions }
 
         Move index ProjectHelpers.Up ->
             let
                 updatedQuestions = ProjectHelpers.flipAdjacentEntries
                     index ProjectHelpers.Decrement updateQuestionIndexes questions
             in
-            ( { model | questions = updatedQuestions }
-            , Cmd.none
-            )
+            { model | questions = updatedQuestions }
 
         Move index ProjectHelpers.Down ->
             let
                 updatedQuestions = ProjectHelpers.flipAdjacentEntries
                     index ProjectHelpers.Increment updateQuestionIndexes questions
             in
-            ( { model | questions = updatedQuestions }
-            , Cmd.none
-            )
+            { model | questions = updatedQuestions }
 
         Move index ProjectHelpers.Bottom ->
             let
@@ -159,9 +142,7 @@ update msg ( { slideIndex, questions } as model ) =
                     index ProjectHelpers.Decrement finalIndex
                     updateQuestionIndexes questions
             in
-            ( { model | questions = updatedQuestions }
-            , Cmd.none
-            )
+            { model | questions = updatedQuestions }
 
 -- VIEW
 

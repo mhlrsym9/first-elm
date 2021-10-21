@@ -65,20 +65,16 @@ textToString: Text -> String
 textToString (Text val) =
     val
 
-init : { questionIndex : Int, slideIndex : Int } -> (Model, Cmd Msg)
+init : { questionIndex : Int, slideIndex : Int } -> Model
 init ( { questionIndex, slideIndex } as flags ) =
     let
-        (answersAreaModel, answersAreaCommands) =
-            AnswersArea.init flags
+        answersAreaModel = AnswersArea.init flags
     in
-    (
-        { questionIndex = questionIndex
-        , slideIndex = slideIndex
-        , questionText = Text "This is a sample question"
-        , answersArea = Hidden answersAreaModel
-        }
-        , answersAreaCommands
-    )
+    { questionIndex = questionIndex
+    , slideIndex = slideIndex
+    , questionText = Text "This is a sample question"
+    , answersArea = Hidden answersAreaModel
+    }
 
 establishAnswersAreaIndexes : Int -> Int -> Model -> Visibility
 establishAnswersAreaIndexes slideIndex questionIndex { answersArea } =
@@ -139,32 +135,26 @@ type Msg =
     | UpdateVisibility Visibility
     | AnswersAreaMsg AnswersArea.Msg
 
-update : Msg -> Model -> (Model, Cmd Msg)
+update : Msg -> Model -> Model
 update msg ( { questionIndex, answersArea } as model ) =
     case msg of
         Update s ->
-            ( { model | questionText = Text s }
-            , Cmd.none
-            )
+            { model | questionText = Text s }
 
         UpdateVisibility updatedAnswersArea ->
-            ( { model | answersArea = updatedAnswersArea }
-            , Cmd.none
-            )
+            { model | answersArea = updatedAnswersArea }
 
         AnswersAreaMsg answersAreaMsg ->
             case answersArea of
                 Hidden _ ->
-                    ( model, Cmd.none )
+                    model
 
                 Visible m ->
                     let
-                        (updatedAnswersAreaModel, answersAreaCommands) =
+                        updatedAnswersAreaModel =
                             AnswersArea.update answersAreaMsg m
                     in
-                    ( { model | answersArea = Visible updatedAnswersAreaModel }
-                    , Cmd.map AnswersAreaMsg answersAreaCommands
-                    )
+                    { model | answersArea = Visible updatedAnswersAreaModel }
 
 -- VIEW
 

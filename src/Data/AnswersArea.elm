@@ -89,16 +89,13 @@ getOptRadio : Model -> Int -> OptRadio
 getOptRadio model answerIndex =
     OptRadio (getCandorAnswer model answerIndex)
 
-init : { slideIndex : Int, questionIndex : Int } -> (Model, Cmd msg)
+init : { slideIndex : Int, questionIndex : Int } -> Model
 init ( { slideIndex, questionIndex } ) =
-    (
-        { slideIndex = slideIndex
-        , questionIndex = questionIndex
-        , optRadio = OptRadio (getCandorAnswerFromIndexes { slideIndex = slideIndex, questionIndex = questionIndex, answerIndex = 0} )
-        , answers = Dict.singleton 0 sampleAnswer
-        }
-        , Cmd.none
-    )
+    { slideIndex = slideIndex
+    , questionIndex = questionIndex
+    , optRadio = OptRadio (getCandorAnswerFromIndexes { slideIndex = slideIndex, questionIndex = questionIndex, answerIndex = 0} )
+    , answers = Dict.singleton 0 sampleAnswer
+    }
 
 type alias Indexes = { slideIndex : Int, questionIndex : Int, answerIndex : Int }
 
@@ -250,22 +247,17 @@ updateOptRadioDuringMove ( { answers, optRadio } as model ) answerIndex adjustme
     in
     matchAnswerIndexToUpdatedOptRadio optRadio updatedOptRadios
 
-update : Msg -> Model -> (Model, Cmd Msg)
+update : Msg -> Model -> Model
 update msg ( { slideIndex, questionIndex, answers } as model ) =
     case msg of
         Add ->
-            ( { model | answers = Dict.insert (Dict.size answers) sampleAnswer answers }
-            , Cmd.none
-            )
+            { model | answers = Dict.insert (Dict.size answers) sampleAnswer answers }
 
         Delete answerIndex ->
-            (
-                { model
-                    | answers = ProjectHelpers.deleteEntry answerIndex identity answers
-                    , optRadio = updateOptRadioDuringDelete model answerIndex
-                }
-                , Cmd.none
-            )
+            { model
+                | answers = ProjectHelpers.deleteEntry answerIndex identity answers
+                , optRadio = updateOptRadioDuringDelete model answerIndex
+            }
 
         Move index ProjectHelpers.Top ->
             let
@@ -275,33 +267,24 @@ update msg ( { slideIndex, questionIndex, answers } as model ) =
                 updatedOptRadio = updateOptRadioDuringMove
                     model index ProjectHelpers.Increment 0
             in
-            (
-                { model
-                    | answers = updatedAnswers
-                    , optRadio = updatedOptRadio
-                }
-                , Cmd.none
-            )
+            { model
+                | answers = updatedAnswers
+                , optRadio = updatedOptRadio
+            }
 
         Move answerIndex ProjectHelpers.Up ->
-            (
-                { model
-                    | answers = ProjectHelpers.flipAdjacentEntries
-                        answerIndex ProjectHelpers.Decrement identity answers
-                    , optRadio = updateOptRadioDuringFlip model answerIndex ProjectHelpers.Decrement
-                }
-                , Cmd.none
-            )
+            { model
+                | answers = ProjectHelpers.flipAdjacentEntries
+                    answerIndex ProjectHelpers.Decrement identity answers
+                , optRadio = updateOptRadioDuringFlip model answerIndex ProjectHelpers.Decrement
+            }
 
         Move answerIndex ProjectHelpers.Down ->
-            (
-                { model
-                    | answers = ProjectHelpers.flipAdjacentEntries
-                        answerIndex ProjectHelpers.Increment identity answers
-                    , optRadio = updateOptRadioDuringFlip model answerIndex ProjectHelpers.Increment
-                }
-                , Cmd.none
-            )
+            { model
+                | answers = ProjectHelpers.flipAdjacentEntries
+                    answerIndex ProjectHelpers.Increment identity answers
+                , optRadio = updateOptRadioDuringFlip model answerIndex ProjectHelpers.Increment
+            }
 
         Move index ProjectHelpers.Bottom ->
             let
@@ -312,18 +295,13 @@ update msg ( { slideIndex, questionIndex, answers } as model ) =
                 updatedOptRadio = updateOptRadioDuringMove
                     model index ProjectHelpers.Decrement finalIndex
             in
-            (
-                { model
-                    | answers = updatedAnswers
-                    , optRadio = updatedOptRadio
-                }
-                , Cmd.none
-            )
+            { model
+                | answers = updatedAnswers
+                , optRadio = updatedOptRadio
+            }
 
         Update index s ->
-            ( { model | answers = Dict.insert index (Answer s) answers }
-            , Cmd.none
-            )
+            { model | answers = Dict.insert index (Answer s) answers }
 
 -- VIEW
 

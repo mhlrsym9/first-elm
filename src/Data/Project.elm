@@ -61,19 +61,19 @@ type Msg =
     | SlideMsg Slide.Msg
     | UpdateCurrentSlideContents Msg
 
-createNewSlide : Int -> String -> (Dict Int Slide.Model, Cmd Msg)
+createNewSlide : Int -> String -> Dict Int Slide.Model
 createNewSlide slideIndex sen =
     let
-        (newSlide, slideCommands) =
+        newSlide =
             Slide.init { slideIndex = slideIndex, sen = sen }
     in
-    (Dict.singleton slideIndex newSlide, Cmd.map SlideMsg slideCommands)
+    Dict.singleton slideIndex newSlide
 
-insertSlideAtSlicePoint : Int -> Model -> (Model, Cmd Msg)
+insertSlideAtSlicePoint : Int -> Model -> Model
 insertSlideAtSlicePoint slicePoint ( { slides, setupEditorName } as model ) =
     let
         (beforeSlides, afterSlides) = Dict.partition (\i _ -> (i < slicePoint)) slides
-        (newSlides, commands) = createNewSlide slicePoint setupEditorName
+        newSlides = createNewSlide slicePoint setupEditorName
         updatedSlides =
             afterSlides
                 |> Dict.Extra.mapKeys (\k -> k + 1)
@@ -81,32 +81,25 @@ insertSlideAtSlicePoint slicePoint ( { slides, setupEditorName } as model ) =
                 |> Dict.union newSlides
                 |> Dict.union beforeSlides
     in
-    ( { model | slides = updatedSlides, slideIndex = slicePoint }, commands )
+    { model | slides = updatedSlides, slideIndex = slicePoint }
 
-storeSlideContents : Msg -> String -> Model -> (Model, Cmd Msg)
-storeSlideContents msg slideContents ( { slideIndex, slides } as projectModel ) =
+storeSlideContents : String -> Model -> Model
+storeSlideContents slideContents ( { slideIndex, slides } as projectModel ) =
     let
         maybeSlideModel = Dict.get slideIndex slides
     in
     case maybeSlideModel of
         Just slideModel ->
             let
-                ( updatedSlideModel, slideMsg ) =
+                updatedSlideModel =
                     Slide.storeSlideContents slideContents slideModel
-                ( updatedProjectModel, projectCommands ) =
-                    update msg { projectModel | slides = Dict.insert slideIndex updatedSlideModel slides }
             in
-            ( updatedProjectModel
-            , Cmd.batch
-                [ Cmd.map SlideMsg slideMsg
-                , projectCommands
-                ]
-            )
+            { projectModel | slides = Dict.insert slideIndex updatedSlideModel slides }
 
         Nothing ->
-            ( projectModel, Cmd.none )
+            projectModel
 
-update : Msg -> Model -> (Model, Cmd Msg)
+update : Msg -> Model -> Model
 update msg ( { slideIndex, slides } as model ) =
     case msg of
         DeleteSlide ->
@@ -117,15 +110,12 @@ update msg ( { slideIndex, slides } as model ) =
                     else
                         slideIndex - 1
             in
-            (
-                { model | slides = ProjectHelpers.deleteEntry slideIndex updateSlideIndexes slides
-                        , slideIndex = updatedSlideIndex
-                }
-                , Cmd.none
-            )
+            { model | slides = ProjectHelpers.deleteEntry slideIndex updateSlideIndexes slides
+                    , slideIndex = updatedSlideIndex
+            }
 
         DisplaySlide updatedSlideIndex ->
-            ( { model | slideIndex = updatedSlideIndex }, Cmd.none )
+            { model | slideIndex = updatedSlideIndex }
 
         InsertSlide ProjectHelpers.Top ->
             insertSlideAtSlicePoint 0 model
@@ -144,39 +134,30 @@ update msg ( { slideIndex, slides } as model ) =
                 updatedSlides = ProjectHelpers.moveEntry
                     slideIndex ProjectHelpers.Increment 0 updateSlideIndexes slides
             in
-            (
-                { model
-                    | slides = updatedSlides
-                    , slideIndex = 0
-                }
-                , Cmd.none
-            )
+            { model
+                | slides = updatedSlides
+                , slideIndex = 0
+            }
 
         Move ProjectHelpers.Up ->
             let
                 updatedSlides = ProjectHelpers.flipAdjacentEntries
                     slideIndex ProjectHelpers.Decrement updateSlideIndexes slides
             in
-            (
-                { model
-                    | slides = updatedSlides
-                    , slideIndex = slideIndex - 1
-                }
-                , Cmd.none
-            )
+            { model
+                | slides = updatedSlides
+                , slideIndex = slideIndex - 1
+            }
 
         Move ProjectHelpers.Down ->
             let
                 updatedSlides = ProjectHelpers.flipAdjacentEntries
                     slideIndex ProjectHelpers.Increment updateSlideIndexes slides
             in
-            (
-                { model
-                    | slides = updatedSlides
-                    , slideIndex = slideIndex + 1
-                }
-                , Cmd.none
-            )
+            { model
+                | slides = updatedSlides
+                , slideIndex = slideIndex + 1
+            }
 
         Move ProjectHelpers.Bottom ->
             let
@@ -184,13 +165,10 @@ update msg ( { slideIndex, slides } as model ) =
                 updatedSlides = ProjectHelpers.moveEntry
                     slideIndex ProjectHelpers.Decrement finalIndex updateSlideIndexes slides
             in
-            (
-                { model
-                    | slides = updatedSlides
-                    , slideIndex = finalIndex
-                }
-                , Cmd.none
-            )
+            { model
+                | slides = updatedSlides
+                , slideIndex = finalIndex
+            }
 
         SlideMsg slideMsg ->
             let
@@ -199,18 +177,16 @@ update msg ( { slideIndex, slides } as model ) =
             case maybeSlide of
                 Just slide ->
                     let
-                        (updatedSlide, updatedSlideMsg) =
+                        updatedSlide =
                             Slide.update slideMsg slide
                     in
-                    ( { model | slides = Dict.insert slideIndex updatedSlide slides }
-                    , Cmd.map SlideMsg updatedSlideMsg
-                    )
+                    { model | slides = Dict.insert slideIndex updatedSlide slides }
 
                 Nothing ->
-                    ( model, Cmd.none )
+                    model
 
-        UpdateCurrentSlideContents nextMsg ->
-            ( model, Cmd.none )
+        UpdateCurrentSlideContents _ ->
+            model
 
 
 -- VIEW
@@ -223,7 +199,7 @@ viewFirstSlideButton { slideIndex, slides } =
     button
         [ class "slide-button"
         , disabled ( (slideIndex == 0) || (numberSlides == 1) )
-        , onClick (DisplaySlide 0)
+        , onClick ( UpdateCurrentSlideContents ( DisplaySlide 0 ) )
         ]
         [ text "<<- First" ]
 
@@ -235,7 +211,7 @@ viewPreviousSlideButton { slideIndex, slides } =
     button
         [ class "slide-button"
         , disabled ( (slideIndex == 0) || (numberSlides == 1) )
-        , onClick ( DisplaySlide (slideIndex - 1) )
+        , onClick ( UpdateCurrentSlideContents ( DisplaySlide (slideIndex - 1) ) )
         ]
         [ text "<- Previous"]
 
@@ -247,7 +223,7 @@ viewNextSlideButton { slideIndex, slides } =
     button
         [ class "slide-button"
         , disabled ( slideIndex == (numberSlides - 1) )
-        , onClick (UpdateCurrentSlideContents ( DisplaySlide ( slideIndex + 1 ) ) )
+        , onClick ( UpdateCurrentSlideContents ( DisplaySlide ( slideIndex + 1 ) ) )
         ]
         [ text "Next ->" ]
 
@@ -259,7 +235,7 @@ viewLastSlideButton { slideIndex, slides } =
     button
         [ class "slide-button"
         , disabled ( slideIndex == (numberSlides - 1) )
-        , onClick ( DisplaySlide (numberSlides - 1) )
+        , onClick (UpdateCurrentSlideContents ( DisplaySlide (numberSlides - 1) ) )
         ]
         [ text "Last ->>" ]
 
@@ -286,7 +262,7 @@ viewInsertAtTopButton : Html Msg
 viewInsertAtTopButton =
     button
         [ class "slide-button"
-        , onClick (InsertSlide ProjectHelpers.Top)
+        , onClick ( UpdateCurrentSlideContents ( InsertSlide ProjectHelpers.Top ) )
         ]
         [ text "<<- Insert new slide before first slide"]
 
@@ -294,7 +270,7 @@ viewInsertBeforeSlideButton : Html Msg
 viewInsertBeforeSlideButton =
     button
         [ class "slide-button"
-        , onClick (InsertSlide ProjectHelpers.Up)
+        , onClick ( UpdateCurrentSlideContents ( InsertSlide ProjectHelpers.Up ) )
         ]
         [ text "<- Insert new slide before this slide"]
 
@@ -302,7 +278,7 @@ viewInsertAfterSlideButton : Html Msg
 viewInsertAfterSlideButton =
     button
         [ class "slide-button"
-        , onClick (UpdateCurrentSlideContents (InsertSlide ProjectHelpers.Down) )
+        , onClick (UpdateCurrentSlideContents ( InsertSlide ProjectHelpers.Down ) )
         ]
         [ text "Add new slide after this slide ->"]
 
@@ -310,7 +286,7 @@ viewInsertAtBottomButton : Html Msg
 viewInsertAtBottomButton =
     button
         [ class "slide-button"
-        , onClick (InsertSlide ProjectHelpers.Bottom)
+        , onClick ( UpdateCurrentSlideContents ( InsertSlide ProjectHelpers.Bottom ) )
         ]
         [ text "Insert new slide after last slide ->>"]
 
@@ -327,7 +303,7 @@ viewInsertSlideActionRow =
 viewMoveSlideToTopButton : Model -> Html Msg
 viewMoveSlideToTopButton { slideIndex } =
     button
-        [ onClick (Move ProjectHelpers.Top)
+        [ onClick ( UpdateCurrentSlideContents ( Move ProjectHelpers.Top ) )
         , disabled (0 == slideIndex)
         ]
         [ text "Move Slide to Top" ]
@@ -335,7 +311,7 @@ viewMoveSlideToTopButton { slideIndex } =
 viewMoveSlideUpButton : Model -> Html Msg
 viewMoveSlideUpButton { slideIndex } =
     button
-        [ onClick (Move ProjectHelpers.Up)
+        [ onClick ( UpdateCurrentSlideContents ( Move ProjectHelpers.Up ) )
         , disabled (0 == slideIndex)
         ]
         [ text "Move Slide Up" ]
@@ -346,7 +322,7 @@ viewMoveSlideDownButton { slideIndex, slides }  =
         numberSlides = Dict.size slides
     in
     button
-        [ onClick (Move ProjectHelpers.Down)
+        [ onClick ( UpdateCurrentSlideContents ( Move ProjectHelpers.Down ) )
         , disabled ( slideIndex == (numberSlides - 1) )
         ]
         [ text "Move Slide Down" ]
@@ -357,7 +333,7 @@ viewMoveSlideToBottomButton { slideIndex, slides } =
         numberSlides = Dict.size slides
     in
     button
-        [ onClick (Move ProjectHelpers.Bottom)
+        [ onClick ( UpdateCurrentSlideContents ( Move ProjectHelpers.Bottom ) )
         , disabled ( slideIndex == (numberSlides - 1) )
         ]
         [ text "Move Slide to Bottom" ]

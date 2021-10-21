@@ -44,20 +44,16 @@ textToString : Text -> String
 textToString (Text val) =
     val
 
-init : { slideIndex : Int, sen : String } -> (Model, Cmd Msg)
+init : { slideIndex : Int, sen : String } -> Model
 init { slideIndex, sen } =
     let
-        (questionsArea, commands) =
-            QuestionsArea.init { slideIndex = slideIndex }
+        questionsArea = QuestionsArea.init { slideIndex = slideIndex }
     in
-    (
-        { slideText = Text "This is a test"
-        , slideIndex = slideIndex
-        , setupEditorName = sen
-        , questionsArea = questionsArea
-        }
-        , Cmd.map QuestionsAreaMsg commands
-    )
+    { slideText = Text "This is a test"
+    , slideIndex = slideIndex
+    , setupEditorName = sen
+    , questionsArea = questionsArea
+    }
 
 updateSlideIndex : Int -> Model -> Model
 updateSlideIndex slideIndex ( { questionsArea } as model ) =
@@ -80,20 +76,19 @@ establishIndexes slideIndex ( { questionsArea } as model ) =
 type Msg =
     QuestionsAreaMsg QuestionsArea.Msg
 
-storeSlideContents : String -> Model -> (Model, Cmd Msg)
+storeSlideContents : String -> Model -> Model
 storeSlideContents slideContents model =
-    ( { model | slideText = Text slideContents }, Cmd.none )
+    { model | slideText = Text slideContents }
 
-update : Msg -> Model -> (Model, Cmd Msg)
+update : Msg -> Model -> Model
 update msg ( { questionsArea } as model ) =
     case msg of
         QuestionsAreaMsg questionsAreaMsg ->
             let
-                (updatedQuestionsAreaModel, questionsAreaCmds) =
+                updatedQuestionsAreaModel =
                     QuestionsArea.update questionsAreaMsg questionsArea
             in
-            ( { model | questionsArea = updatedQuestionsAreaModel }
-            , Cmd.map QuestionsAreaMsg questionsAreaCmds )
+            { model | questionsArea = updatedQuestionsAreaModel }
 
 -- VIEW
 

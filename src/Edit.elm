@@ -130,29 +130,25 @@ processDirtyMessage ( { project } as model ) isDirty =
                 _ ->
                     ( model, Cmd.none )
 
-storeSlideContents : Project.Msg -> String -> Model -> (Model, Cmd Msg)
-storeSlideContents msg slideContents ( { project } as model ) =
+storeSlideContents : String -> Model -> Model
+storeSlideContents slideContents ( { project } as model ) =
     case project of
         Dirty (Api.Loaded projectModel) ->
             let
-                (updatedProject, projectCmd) =
-                    Project.storeSlideContents msg slideContents projectModel
+                updatedProject =
+                    Project.storeSlideContents slideContents projectModel
             in
-            ( { model | project = Dirty (Api.Loaded updatedProject) }
-            , Cmd.map ProjectMsg projectCmd
-            )
+            { model | project = Dirty (Api.Loaded updatedProject) }
 
         Clean (Api.Loaded projectModel) ->
             let
-                (updatedProject, projectCmd) =
-                    Project.storeSlideContents msg slideContents projectModel
+                updatedProject =
+                    Project.storeSlideContents slideContents projectModel
             in
-            ( { model | project = Clean (Api.Loaded updatedProject) }
-            , Cmd.map ProjectMsg projectCmd
-            )
+            { model | project = Clean (Api.Loaded updatedProject) }
 
         _ ->
-            ( model, Cmd.none )
+            model
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg ( { knownContentCode, learningContentCode, projectName, project } as model ) =
@@ -175,20 +171,20 @@ update msg ( { knownContentCode, learningContentCode, projectName, project } as 
             case project of
                 Clean (Api.Loaded projectModel) ->
                     let
-                        ( updatedProjectModel, projectCommands ) =
+                        updatedProjectModel =
                             Project.update projectMsg projectModel
                     in
                     ( { model | project = Dirty (Api.Loaded updatedProjectModel) }
-                    , Cmd.map ProjectMsg projectCommands
+                    , Cmd.none
                     )
 
                 Dirty (Api.Loaded projectModel) ->
                     let
-                        ( updatedProjectModel, projectCommands ) =
+                        updatedProjectModel =
                             Project.update projectMsg projectModel
                     in
                     ( { model | project = Dirty (Api.Loaded updatedProjectModel) }
-                    , Cmd.map ProjectMsg projectCommands
+                    , Cmd.none
                     )
 
                 _ ->
@@ -246,7 +242,7 @@ viewSaveButton { project } =
                     True
     in
     button
-        [ onClick Save
+        [ onClick (UpdateCurrentSlideContents Save)
         , disabled disabledState ]
         [ text "Save Project" ]
 

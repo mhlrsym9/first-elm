@@ -31,12 +31,12 @@ port mceEditorSubscription : (String -> msg) -> Sub msg
 
 ---- PROCEDURES ----
 
-syncMceEditorProcedure : Project.Msg -> Cmd Msg
+syncMceEditorProcedure : Msg -> Cmd Msg
 syncMceEditorProcedure nextMsg =
     Channel.open (\_ -> syncMceEditor () )
         |> Channel.connect mceEditorSubscription
         |> Channel.acceptOne
-        |> Procedure.run ProcMsg (ReceivedMceEditorMessage nextMsg)
+        |> Procedure.run ProcMsg (ReceivedMceEditorMsg nextMsg)
 
 ---- SUBSCRIPTIONS ----
 
@@ -90,7 +90,6 @@ init { setupEditorName } url navigationKey =
 
 ---- UPDATE ----
 
-
 type Msg
     = CompletedLanguageLoad (Result Http.Error LanguageSelect.Languages)
     | CreateMsg Create.Msg
@@ -102,7 +101,7 @@ type Msg
     | OpenMsg Open.Msg
     | PassedSlowLoadThreshold
     | ProcMsg (Procedure.Program.Msg Msg)
-    | ReceivedMceEditorMessage Project.Msg String
+    | ReceivedMceEditorMsg Msg String
     | StartMsg Start.Msg
     | Visit UrlRequest
 
@@ -234,10 +233,13 @@ update msg model =
                 Edit.ProjectMsg projectMsg ->
                     case projectMsg of
                         Project.UpdateCurrentSlideContents nextMsg ->
-                            ( model, syncMceEditorProcedure nextMsg )
+                            ( model, syncMceEditorProcedure ( EditMsg ( Edit.ProjectMsg nextMsg ) ) )
 
                         _ ->
                             updateEdit editMsg editModel model
+
+                Edit.UpdateCurrentSlideContents nextMsg ->
+                    ( model, syncMceEditorProcedure (EditMsg nextMsg) )
 
                 _ ->
                     updateEdit editMsg editModel model
@@ -290,16 +292,16 @@ update msg model =
             Procedure.Program.update pMsg model.procModel
                 |> Tuple.mapFirst (\updated -> { model | procModel = updated })
 
-        ( ReceivedMceEditorMessage nextMsg slideContents, Edit editModel ) ->
+        ( ReceivedMceEditorMsg nextMsg slideContents, Edit editModel ) ->
             let
-                ( updatedEditModel, editCmd ) =
-                    Edit.storeSlideContents nextMsg slideContents editModel
+                updatedEditModel =
+                    Edit.storeSlideContents slideContents editModel
             in
             ( { model | page = Edit updatedEditModel }
-            , Cmd.map EditMsg editCmd
+            , Task.perform (always nextMsg) (Task.succeed ())
             )
 
-        ( ReceivedMceEditorMessage _ _, _ ) ->
+        ( ReceivedMceEditorMsg _ _, _ ) ->
             Debug.todo "Handle ReceivedMceEditorMessage error case"
 
         ( StartMsg startMsg, Start startModel ) ->
