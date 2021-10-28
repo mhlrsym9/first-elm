@@ -90,7 +90,6 @@ init flags url navigationKey =
         , LanguageSelect.fetchLanguages
             |> Task.attempt CompletedLanguageLoad
         , Task.perform (\_ -> PassedSlowLoadThreshold) Loading.slowThreshold
-        , Task.perform ConsoleOut (Task.succeed (Url.toString url))
         ]
     )
 
