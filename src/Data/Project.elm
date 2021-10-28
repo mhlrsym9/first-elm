@@ -43,9 +43,9 @@ init : String -> (Model, Cmd Msg)
 init sen =
     ( { slideIndex = 0, slides = Dict.empty, setupEditorName = sen }, Cmd.none )
 
-initNewProject : String -> (Model, Cmd Msg)
+initNewProject : String -> Model
 initNewProject sen =
-    ( { slideIndex = 0, slides = createNewSlide 0 sen, setupEditorName = sen }, Cmd.none )
+    { slideIndex = 0, slides = createNewSlide 0 sen, setupEditorName = sen }
 
 updateSlideIndexes : Dict Int Slide.Model -> Dict Int Slide.Model
 updateSlideIndexes slides =

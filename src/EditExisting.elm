@@ -63,24 +63,6 @@ type Msg =
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
     case msg of
-        PassedSlowLoadThreshold ->
-            let
-                -- If any data is still Loading, change it to LoadingSlowly
-                -- so `view` knows to render a spinner.
-                updatedProjectModel =
-                    case model.project of
-                        Edit.Clean Api.Loading ->
-                            Api.LoadingSlowly
-
-                        Edit.Clean pm ->
-                            pm
-
-                        Edit.Dirty pm ->
-                            pm
-            in
-            ( { model | project = Edit.Clean updatedProjectModel }
-            , Cmd.none )
-
         CompletedProjectLoad result ->
             case result of
                 Ok project ->
@@ -103,6 +85,24 @@ update msg model =
             ( updatedModel
             , Cmd.map EditMsg updatedCmd
             )
+
+        PassedSlowLoadThreshold ->
+            let
+                -- If any data is still Loading, change it to LoadingSlowly
+                -- so `view` knows to render a spinner.
+                updatedProjectModel =
+                    case model.project of
+                        Edit.Clean Api.Loading ->
+                            Api.LoadingSlowly
+
+                        Edit.Clean pm ->
+                            pm
+
+                        Edit.Dirty pm ->
+                            pm
+            in
+            ( { model | project = Edit.Clean updatedProjectModel }
+            , Cmd.none )
 
 view : Model -> Html Msg
 view model =

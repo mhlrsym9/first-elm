@@ -216,11 +216,11 @@ update msg model =
 
         ( Dirty isDirty, Edit editModel ) ->
             let
-                ( updatedEditModel, editCmd ) =
+                updatedEditModel =
                     Edit.processDirtyMessage editModel isDirty
             in
                 ( { model | page = Edit updatedEditModel }
-                , Cmd.map EditMsg editCmd
+                , Cmd.none
                 )
 
         ( Dirty _, _ ) ->
@@ -378,6 +378,9 @@ viewContent { page, languages } =
 
                 Api.Loaded _ ->
                     viewHeader page
+
+                _ ->
+                    div [] []
 
     in
     ( "Candor HTML", contents )

@@ -1,4 +1,4 @@
-module Edit exposing (getProjectModel, Model, Modified(..), Msg(..), init, initNewProject, processDirtyMessage, storeSlideContents, update, view)
+module Edit exposing (encodeProject, getProjectModel, Model, Modified(..), Msg(..), init, processDirtyMessage, storeSlideContents, update, view)
 
 import Api
 import Browser.Navigation as Navigation
@@ -55,14 +55,6 @@ init { key, kcc, lcc, pn, model, candorUrl } =
         , Cmd.none
     )
 
-initNewProject : String -> (Project.Model, Cmd Msg)
-initNewProject sen =
-    let
-        (projectModel, projectCommands) =
-            Project.initNewProject sen
-    in
-    ( projectModel, Cmd.map ProjectMsg projectCommands)
-
 getProjectModel : Model -> Maybe Project.Model
 getProjectModel model =
     case model.project of
@@ -82,8 +74,8 @@ getProjectModel model =
 
 -- UPDATE
 
-type Msg =
-    Cancel
+type Msg
+    = Cancel
     | CompletedProjectSave (Result Http.Error SaveResult)
     | PassedSlowSaveThreshold
     | ProjectMsg Project.Msg
@@ -93,7 +85,7 @@ type Msg =
 saveProjectDecoder : Decoder SaveResult
 saveProjectDecoder =
     succeed SaveResult
-        |> required "is" string
+        |> required "id" string
 
 encodeProject : String -> String -> String -> Project.Model -> Encode.Value
 encodeProject knownContentCode learningContentCode projectName project =
@@ -118,24 +110,24 @@ saveProject candorUrl json =
         , timeout = Nothing
         }
 
-processDirtyMessage : Model -> Bool -> (Model, Cmd Msg)
+processDirtyMessage : Model -> Bool -> Model
 processDirtyMessage ( { project } as model ) isDirty =
     case isDirty of
         True ->
             case project of
                 Clean p ->
-                    ( { model | project = Dirty p }, Cmd.none )
+                    { model | project = Dirty p }
 
                 _ ->
-                    ( model, Cmd.none )
+                    model
 
         False ->
             case project of
                 Dirty p ->
-                    ( { model | project = Clean p }, Cmd.none )
+                    { model | project = Clean p }
 
                 _ ->
-                    ( model, Cmd.none )
+                    model
 
 storeSlideContents : String -> Model -> Model
 storeSlideContents slideContents ( { project } as model ) =
@@ -163,16 +155,32 @@ update msg ( { knownContentCode, learningContentCode, projectName, project, cand
         Cancel ->
             ( model, Navigation.pushUrl model.navigationKey (Routes.routeToUrl Routes.Home) )
 
-        CompletedProjectSave _ ->
+        CompletedProjectSave result ->
+            case result of
+                Ok _ ->
+                    case project of
+                        Dirty (Api.Updating p) ->
+                            ( { model | project = Clean (Api.Loaded p) }, Cmd.none )
+
+                        Dirty (Api.UpdatingSlowly p) ->
+                            ( { model | project = Clean (Api.Loaded p) }, Cmd.none )
+
+                        _ ->
+                            ( model, Cmd.none )
+
+                Err _ ->
+                    ( { model | project = Clean Api.Failed }
+                    , Cmd.none
+                    )
+
+        PassedSlowSaveThreshold ->
             case project of
-                Dirty p ->
-                    ( { model | project = Clean p }, Cmd.none )
+                Dirty (Api.Updating projectModel) ->
+                    ( { model | project = Dirty (Api.UpdatingSlowly projectModel) }
+                    , Cmd.none )
 
                 _ ->
                     ( model, Cmd.none )
-
-        PassedSlowSaveThreshold ->
-            ( model, Cmd.none )
 
         ProjectMsg projectMsg ->
             case projectMsg of
@@ -205,7 +213,7 @@ update msg ( { knownContentCode, learningContentCode, projectName, project, cand
         Save ->
             case project of
                 Dirty (Api.Loaded projectModel) ->
-                    ( model
+                    ( { model | project = Dirty (Api.Updating projectModel) }
                     , Cmd.batch
                         [ encodeProject knownContentCode learningContentCode projectName projectModel
                             |> saveProject candorUrl
@@ -286,6 +294,27 @@ view ( {  project } as model ) =
 
         Dirty (Api.Loaded projectModel) ->
             loadedView model projectModel
+
+        Dirty (Api.Updating projectModel) ->
+            loadedView model projectModel
+
+        Dirty (Api.UpdatingSlowly projectModel) ->
+            loadedView model projectModel
+
+        Clean Api.LoadingSlowly ->
+            div
+                [ ]
+                [ Loading.icon ]
+
+        Dirty Api.LoadingSlowly ->
+            div
+                [ ]
+                [ Loading.icon ]
+
+        Clean (Api.CreatingSlowly _) ->
+            div
+                [ ]
+                [ Loading.icon ]
 
         _ ->
             div

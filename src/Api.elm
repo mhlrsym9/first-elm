@@ -4,10 +4,14 @@ import Http
 import Json.Decode exposing (Decoder)
 
 type Status a
-    = Loading
+    = Creating a
+    | CreatingSlowly a
+    | Failed
+    | Loading
     | LoadingSlowly
     | Loaded a
-    | Failed
+    | Updating a
+    | UpdatingSlowly a
 
 handleJsonResponse : Decoder a -> Http.Response String -> Result Http.Error a
 handleJsonResponse decoder response =

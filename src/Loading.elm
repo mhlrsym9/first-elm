@@ -9,7 +9,6 @@ import Html.Attributes exposing (alt, height, src, width)
 import Process
 import Task exposing (Task)
 
-
 icon : Html msg
 icon =
     Html.img
