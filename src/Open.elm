@@ -48,12 +48,12 @@ projectDescriptionsDecoder =
     (list projectDescriptionDecoder)
 
 type alias Data =
-    { knownLanguageModel : LanguageSelect.Model
-    , learningLanguageModel : LanguageSelect.Model
-    , projectDescriptions : Api.Status ProjectDescriptions
+    { chosenProject : Maybe String
     , displayedProjectDescriptions : ProjectDescriptions
-    , chosenProject : Maybe String
+    , knownLanguageModel : LanguageSelect.Model
+    , learningLanguageModel : LanguageSelect.Model
     , navigationKey : Navigation.Key
+    , projectDescriptions : Api.Status ProjectDescriptions
     }
 
 type Model
@@ -69,8 +69,8 @@ initialData navigationKey knownLanguageModel learningLanguageModel =
     , navigationKey = navigationKey
     }
 
-init : Navigation.Key -> LanguageSelect.Languages -> (Model, Cmd Msg)
-init key languages =
+init : Navigation.Key -> String -> LanguageSelect.Languages -> (Model, Cmd Msg)
+init key candorUrl languages =
     let
         ( knownLanguageModel, knownLanguageCmd ) =
             LanguageSelect.init languages
@@ -82,18 +82,18 @@ init key languages =
     , Cmd.batch
         [ Cmd.map KnownLanguageMsg knownLanguageCmd
         , Cmd.map LearningLanguageMsg learningLanguageCmd
-        , fetchProjects
+        , fetchProjects candorUrl
             |> Task.attempt CompletedProjectDescriptorsLoad
         , Task.perform (\_ -> PassedSlowLoadThreshold) Loading.slowThreshold
         ]
     )
 
-fetchProjects : Task Http.Error ProjectDescriptions
-fetchProjects =
+fetchProjects : String -> Task Http.Error ProjectDescriptions
+fetchProjects candorUrl =
     Http.task
         { method = "GET"
         , headers = []
-        , url = "http://192.168.34.9:8080/catalog"
+        , url = candorUrl ++ "/catalog"
         , body = Http.emptyBody
         , resolver = stringResolver (Api.handleJsonResponse projectDescriptionsDecoder)
         , timeout = Nothing

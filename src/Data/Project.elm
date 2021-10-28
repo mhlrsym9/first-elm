@@ -1,4 +1,4 @@
-module Data.Project exposing (encodeProject, establishIndexes, projectDecoder, init, Model, Msg(..), storeSlideContents, update, view)
+module Data.Project exposing (encodeProject, establishIndexes, projectDecoder, init, initNewProject, Model, Msg(..), storeSlideContents, update, view)
 
 import Data.ProjectHelpers as ProjectHelpers
 import Data.Slide as Slide
@@ -42,6 +42,10 @@ encodeProject { slides } =
 init : String -> (Model, Cmd Msg)
 init sen =
     ( { slideIndex = 0, slides = Dict.empty, setupEditorName = sen }, Cmd.none )
+
+initNewProject : String -> (Model, Cmd Msg)
+initNewProject sen =
+    ( { slideIndex = 0, slides = createNewSlide 0 sen, setupEditorName = sen }, Cmd.none )
 
 updateSlideIndexes : Dict Int Slide.Model -> Dict Int Slide.Model
 updateSlideIndexes slides =

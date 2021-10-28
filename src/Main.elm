@@ -24,6 +24,7 @@ import Url exposing (Url)
 ---- PORTS ----
 
 port syncMceEditor : () -> Cmd msg
+port consoleLog : String -> Cmd msg
 
 port dirtyReceived : (Bool -> msg) -> Sub msg
 port mceEditorSubscription : (String -> msg) -> Sub msg
@@ -60,23 +61,28 @@ type alias Model =
     , languages : Api.Status LanguageSelect.Languages
     , navigationKey : Navigation.Key
     , procModel : (Procedure.Program.Model Msg)
-    , setupEditorName : String
+    , flags : Flags
     }
 
-initialModel : Navigation.Key -> String -> Model
-initialModel navigationKey setupEditorName =
+type alias Flags =
+    { setupEditorName: String
+    , candorUrl: String }
+
+initialModel : Navigation.Key -> Flags -> Model
+initialModel navigationKey flags =
     { page = NotFound
     , languages = Api.Loading
     , navigationKey = navigationKey
     , procModel = Procedure.Program.init
-    , setupEditorName = setupEditorName
+    , flags = flags
     }
 
-init : { setupEditorName: String } -> Url -> Navigation.Key -> ( Model, Cmd Msg )
-init { setupEditorName } url navigationKey =
+init : Flags -> Url -> Navigation.Key -> ( Model, Cmd Msg )
+init flags url navigationKey =
     let
+        -- Make sure path is empty; Tomcat sends context path which is not handled in the Route matchings.
         (model, cmd) =
-            setNewPage (Routes.match url) (initialModel navigationKey setupEditorName)
+            setNewPage (Routes.match { url | path = "/" }) (initialModel navigationKey flags)
     in
     ( model
     , Cmd.batch
@@ -84,6 +90,7 @@ init { setupEditorName } url navigationKey =
         , LanguageSelect.fetchLanguages
             |> Task.attempt CompletedLanguageLoad
         , Task.perform (\_ -> PassedSlowLoadThreshold) Loading.slowThreshold
+        , Task.perform ConsoleOut (Task.succeed (Url.toString url))
         ]
     )
 
@@ -91,6 +98,7 @@ init { setupEditorName } url navigationKey =
 
 type Msg
     = CompletedLanguageLoad (Result Http.Error LanguageSelect.Languages)
+    | ConsoleOut String
     | CreateMsg Create.Msg
     | Dirty Bool
     | EditExistingMsg EditExisting.Msg
@@ -105,7 +113,7 @@ type Msg
     | Visit UrlRequest
 
 setNewPage : Maybe Routes.Route -> Model -> ( Model, Cmd Msg )
-setNewPage maybeRoute ( { navigationKey, setupEditorName } as model ) =
+setNewPage maybeRoute ( { navigationKey, flags } as model ) =
     case maybeRoute of
         Just Routes.Home ->
             let
@@ -133,7 +141,7 @@ setNewPage maybeRoute ( { navigationKey, setupEditorName } as model ) =
             let
                 ( openModel, openCmd ) =
                     Open.init
-                        navigationKey <|
+                        navigationKey flags.candorUrl <|
                         case model.languages of
                             Api.Loaded languages ->
                                 languages
@@ -148,7 +156,7 @@ setNewPage maybeRoute ( { navigationKey, setupEditorName } as model ) =
                 Just projectName ->
                     let
                         ( editModel, editCmd ) =
-                            EditNew.init { key = navigationKey, kcc = k, lcc = l, pn =  projectName, sen = setupEditorName }
+                            EditNew.init { key = navigationKey, kcc = k, lcc = l, pn =  projectName, candorUrl = flags.candorUrl, sen = flags.setupEditorName }
                     in
                     ( { model | page = Edit editModel }
                     , Cmd.map EditNewMsg editCmd )
@@ -160,7 +168,7 @@ setNewPage maybeRoute ( { navigationKey, setupEditorName } as model ) =
                 Just projectName ->
                     let
                         ( editModel, editCmd ) =
-                            EditExisting.init { key = navigationKey, kcc = k, lcc = l, pn = projectName, sen = setupEditorName }
+                            EditExisting.init { key = navigationKey, kcc = k, lcc = l, pn = projectName, candorUrl = flags.candorUrl, sen = flags.setupEditorName }
                     in
                     ( { model | page = Edit editModel }
                     , Cmd.map EditExistingMsg editCmd )
@@ -191,6 +199,9 @@ update msg model =
                 Err _ ->
                     ( { model | languages = Api.Failed }, Cmd.none )
 
+        ( ConsoleOut urlStr, _ ) ->
+            ( model, consoleLog urlStr )
+
         ( CreateMsg createMsg, Create createModel ) ->
             let
                 ( updatedCreateModel, createCmd ) =
@@ -201,7 +212,8 @@ update msg model =
             )
 
         ( CreateMsg _, _ ) ->
-            Debug.todo "Handle CreateMsg error case"
+--            Debug.todo "Handle CreateMsg error case"
+            ( model, Cmd.none )
 
         ( Dirty isDirty, Edit editModel ) ->
             let
@@ -213,7 +225,8 @@ update msg model =
                 )
 
         ( Dirty _, _ ) ->
-            Debug.todo "Handle Dirty"
+--            Debug.todo "Handle Dirty"
+            ( model, Cmd.none )
 
         ( EditExistingMsg editExistingMsg, Edit editModel ) ->
             let
@@ -225,7 +238,8 @@ update msg model =
             )
 
         ( EditExistingMsg _, _ ) ->
-            Debug.todo "Handle EditExistingMsg error case"
+--            Debug.todo "Handle EditExistingMsg error case"
+            ( model, Cmd.none )
 
         ( EditMsg editMsg, Edit editModel ) ->
             case editMsg of
@@ -236,7 +250,8 @@ update msg model =
                     updateEdit editMsg editModel model
 
         ( EditMsg _, _ ) ->
-            Debug.todo "Handle EditMsg error case"
+--            Debug.todo "Handle EditMsg error case"
+            ( model, Cmd.none )
 
         ( EditNewMsg editMsg, Edit editModel ) ->
             let
@@ -248,7 +263,8 @@ update msg model =
             )
 
         ( EditNewMsg _, _ ) ->
-            Debug.todo "Handle EditNewMsg error case"
+--            Debug.todo "Handle EditNewMsg error case"
+            ( model, Cmd.none )
 
         ( NewRoute maybeRoute, _ ) ->
             setNewPage maybeRoute model
@@ -263,7 +279,8 @@ update msg model =
             )
 
         ( OpenMsg _, _ ) ->
-            Debug.todo "Handle OpenMsg error case"
+--            Debug.todo "Handle OpenMsg error case"
+            ( model, Cmd.none )
 
         ( PassedSlowLoadThreshold, _ ) ->
             let
@@ -293,7 +310,8 @@ update msg model =
             )
 
         ( ReceivedMceEditorMsg _ _, _ ) ->
-            Debug.todo "Handle ReceivedMceEditorMessage error case"
+--            Debug.todo "Handle ReceivedMceEditorMessage error case"
+            ( model, Cmd.none )
 
         ( StartMsg startMsg, Start startModel ) ->
             let
@@ -305,10 +323,12 @@ update msg model =
             )
 
         ( StartMsg _, _ ) ->
-            Debug.todo "Handle StartMsg error case"
+--            Debug.todo "Handle StartMsg error case"
+            ( model, Cmd.none )
 
         ( Visit _, _ ) ->
-            Debug.todo "Handle Visit"
+--            Debug.todo "Handle Visit"
+            ( model, Cmd.none )
 
 ---- VIEW ---
 
@@ -376,7 +396,7 @@ view model =
 ---- PROGRAM ----
 
 
-main : Program { setupEditorName: String } Model Msg
+main : Program Flags Model Msg
 main =
     Browser.application
         { view = view

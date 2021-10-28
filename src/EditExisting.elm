@@ -1,4 +1,4 @@
-module EditExisting exposing (..)
+module EditExisting exposing (Init, init, Msg, update)
 
 import Api
 import Browser.Navigation as Navigation
@@ -15,25 +15,34 @@ import Url.Builder as Builder
 type alias Model =
     Edit.Model
 
-init : { key : Navigation.Key, kcc : String, lcc : String, pn : String, sen : String }-> (Model, Cmd Msg)
-init { key, kcc, lcc, pn, sen } =
+type alias Init =
+    { key : Navigation.Key
+    , kcc : String
+    , lcc : String
+    , pn : String
+    , sen : String
+    , candorUrl : String
+    }
+
+init : Init -> (Model, Cmd Msg)
+init ( { key, kcc, lcc, pn, sen, candorUrl } as flags ) =
     let
         ( editModel, editMsg ) =
-            Edit.init { key = key, kcc = kcc, lcc = lcc, pn = pn, model = Api.Loading }
+            Edit.init { key = key, kcc = kcc, lcc = lcc, pn = pn, candorUrl = candorUrl, model = Api.Loading }
     in
     ( editModel
     , Cmd.batch
         [ Cmd.map EditMsg editMsg
-        , (fetchProject kcc lcc pn sen)
+        , (fetchProject flags)
             |> Task.attempt CompletedProjectLoad
         , Task.perform (\_ -> PassedSlowLoadThreshold) Loading.slowThreshold
         ]
     )
 
-fetchProject : String -> String -> String -> String -> Task Http.Error Project.Model
-fetchProject k l p sen =
+fetchProject : Init -> Task Http.Error Project.Model
+fetchProject { candorUrl, kcc, lcc, sen, pn } =
     let
-        url = Builder.relative [Edit.urlPath, "read", k, l, p] []
+        url = Builder.relative [candorUrl, "read", kcc, lcc, pn] []
     in
     Http.task
         { method = "GET"

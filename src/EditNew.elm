@@ -10,11 +10,20 @@ import Html exposing (Html)
 type alias Model =
     Edit.Model
 
-init : { key : Navigation.Key, kcc : String, lcc : String, pn : String, sen : String } -> (Model, Cmd Msg)
-init { key, kcc, lcc, pn, sen } =
+type alias Init =
+    { candorUrl : String
+    , key : Navigation.Key
+    , kcc : String
+    , lcc : String
+    , pn : String
+    , sen : String
+    }
+
+init : Init -> (Model, Cmd Msg)
+init { candorUrl, key, kcc, lcc, pn, sen } =
     let
         (projectModel, projectCommands) = Edit.initNewProject sen
-        (editModel, editCommands) = Edit.init { key = key, kcc = kcc, lcc = lcc, pn = pn, model = Api.Loaded projectModel }
+        (editModel, editCommands) = Edit.init { key = key, kcc = kcc, lcc = lcc, pn = pn, candorUrl = candorUrl, model = Api.Loaded projectModel }
     in
     ( editModel
     , Cmd.batch

@@ -1,4 +1,4 @@
-module Edit exposing (getProjectModel, Model, Modified(..), Msg(..), init, initNewProject, processDirtyMessage, storeSlideContents, update, urlPath, view)
+module Edit exposing (getProjectModel, Model, Modified(..), Msg(..), init, initNewProject, processDirtyMessage, storeSlideContents, update, view)
 
 import Api
 import Browser.Navigation as Navigation
@@ -22,9 +22,10 @@ type Modified a =
     | Dirty a
 
 type alias Model =
-    { project : Modified (Api.Status Project.Model)
+    { candorUrl : String
     , knownContentCode : String
     , learningContentCode : String
+    , project : Modified (Api.Status Project.Model)
     , projectName : String
     , navigationKey : Navigation.Key
     }
@@ -32,12 +33,22 @@ type alias Model =
 type alias SaveResult =
     { id : String }
 
-init : { key : Navigation.Key, kcc : String, lcc : String, pn : String, model : Api.Status Project.Model } -> (Model, Cmd Msg)
-init { key, kcc, lcc, pn, model } =
+type alias Init =
+    { key : Navigation.Key
+    , kcc : String
+    , lcc : String
+    , pn : String
+    , candorUrl : String
+    , model : Api.Status Project.Model
+    }
+
+init : Init -> (Model, Cmd Msg)
+init { key, kcc, lcc, pn, model, candorUrl } =
     (
-        { project = Clean model
+        { candorUrl = candorUrl
         , knownContentCode = kcc
         , learningContentCode = lcc
+        , project = Clean model
         , projectName = pn
         , navigationKey = key
         }
@@ -48,13 +59,9 @@ initNewProject : String -> (Project.Model, Cmd Msg)
 initNewProject sen =
     let
         (projectModel, projectCommands) =
-            Project.init sen
+            Project.initNewProject sen
     in
     ( projectModel, Cmd.map ProjectMsg projectCommands)
-
-urlPath : String
-urlPath =
-    "http://192.168.34.9:8080"
 
 getProjectModel : Model -> Maybe Project.Model
 getProjectModel model =
@@ -97,10 +104,10 @@ encodeProject knownContentCode learningContentCode projectName project =
         , ( "slides", Project.encodeProject project )
         ]
 
-saveProject : Encode.Value -> Task Http.Error SaveResult
-saveProject json =
+saveProject : String -> Encode.Value -> Task Http.Error SaveResult
+saveProject candorUrl json =
     let
-        url = Builder.relative [urlPath, "update"] []
+        url = Builder.relative [candorUrl, "update"] []
     in
     Http.task
         { method = "POST"
@@ -151,7 +158,7 @@ storeSlideContents slideContents ( { project } as model ) =
             model
 
 update : Msg -> Model -> (Model, Cmd Msg)
-update msg ( { knownContentCode, learningContentCode, projectName, project } as model ) =
+update msg ( { knownContentCode, learningContentCode, projectName, project, candorUrl } as model ) =
     case msg of
         Cancel ->
             ( model, Navigation.pushUrl model.navigationKey (Routes.routeToUrl Routes.Home) )
@@ -201,7 +208,7 @@ update msg ( { knownContentCode, learningContentCode, projectName, project } as 
                     ( model
                     , Cmd.batch
                         [ encodeProject knownContentCode learningContentCode projectName projectModel
-                            |> saveProject
+                            |> saveProject candorUrl
                             |> Task.attempt CompletedProjectSave
                         , Task.perform (\_ -> PassedSlowSaveThreshold) Loading.slowThreshold
                         ]
