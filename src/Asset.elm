@@ -1,4 +1,4 @@
-module Asset exposing (Image, defaultAvatar, error, loading, src)
+module Asset exposing (Image, defaultAvatar, error, image, src)
 
 {-| Assets, such as images, videos, and audio. (We only have images for now.)
 
@@ -23,20 +23,13 @@ error : Image
 error =
     image "error.jpg"
 
-
-loading : Image
-loading =
-    image "loading.svg"
-
-
 defaultAvatar : Image
 defaultAvatar =
     image "smiley-cyrus.jpg"
 
-
 image : String -> Image
-image filename =
-    Image ("/public/images/" ++ filename)
+image path =
+    Image path
 
 
 

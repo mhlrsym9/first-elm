@@ -2,6 +2,7 @@ module Open exposing (Model, Msg, init, update, view)
 
 import Api
 import Browser.Navigation as Navigation
+import Flags exposing (Flags)
 import Html exposing (Html, button, div, label, option, select, text)
 import Html.Attributes exposing (attribute, class, disabled, id, name, size, value)
 import Html.Events exposing (onClick)
@@ -52,6 +53,7 @@ type alias Data =
     , displayedProjectDescriptions : ProjectDescriptions
     , knownLanguageModel : LanguageSelect.Model
     , learningLanguageModel : LanguageSelect.Model
+    , loadingPath : String
     , navigationKey : Navigation.Key
     , projectDescriptions : Api.Status ProjectDescriptions
     }
@@ -59,18 +61,19 @@ type alias Data =
 type Model
     = Success Data
 
-initialData : Navigation.Key -> LanguageSelect.Model -> LanguageSelect.Model -> Data
-initialData navigationKey knownLanguageModel learningLanguageModel =
-    { knownLanguageModel = knownLanguageModel
-    , learningLanguageModel = learningLanguageModel
-    , projectDescriptions = Api.Loading
+initialData : Navigation.Key -> LanguageSelect.Model -> LanguageSelect.Model -> String -> Data
+initialData navigationKey knownLanguageModel learningLanguageModel loadingPath =
+    { chosenProject = Nothing
     , displayedProjectDescriptions = [ ]
-    , chosenProject = Nothing
+    , knownLanguageModel = knownLanguageModel
+    , learningLanguageModel = learningLanguageModel
+    , loadingPath = loadingPath
+    , projectDescriptions = Api.Loading
     , navigationKey = navigationKey
     }
 
-init : Navigation.Key -> String -> LanguageSelect.Languages -> (Model, Cmd Msg)
-init key candorUrl languages =
+init : Navigation.Key -> Flags -> LanguageSelect.Languages -> (Model, Cmd Msg)
+init key { loadingPath, candorUrl } languages =
     let
         ( knownLanguageModel, knownLanguageCmd ) =
             LanguageSelect.init languages
@@ -78,7 +81,7 @@ init key candorUrl languages =
         ( learningLanguageModel, learningLanguageCmd ) =
             LanguageSelect.init languages
     in
-    ( Success (initialData key knownLanguageModel learningLanguageModel)
+    ( Success (initialData key knownLanguageModel learningLanguageModel loadingPath)
     , Cmd.batch
         [ Cmd.map KnownLanguageMsg knownLanguageCmd
         , Cmd.map LearningLanguageMsg learningLanguageCmd
@@ -315,13 +318,13 @@ viewProjectDescription ( { project } as pd ) =
 view : Model -> Html Msg
 view model =
     case model of
-        Success { knownLanguageModel, learningLanguageModel, chosenProject, projectDescriptions, displayedProjectDescriptions } ->
+        Success { knownLanguageModel, learningLanguageModel, loadingPath, chosenProject, projectDescriptions, displayedProjectDescriptions } ->
             case projectDescriptions of
                 Api.Loading ->
                     div [] []
 
                 Api.LoadingSlowly ->
-                    div [] [ Loading.icon ]
+                    Loading.icon loadingPath
 
                 Api.Failed ->
                     div [] [ Loading.error "project descriptions" ]

@@ -3,12 +3,14 @@ import { Elm } from './Main.elm';
 import * as serviceWorker from './serviceWorker';
 import '@tinymce/tinymce-webcomponent';
 import {setupEditorName, extractEditorContents} from "./tinymce.js";
+import loadingPath from '../public/images/loading.svg'
 
 let app = Elm.Main.init({
     node: document.getElementById('root'),
     flags:
         { setupEditorName: setupEditorName()
         , candorUrl : process.env.ELM_APP_CANDOR_URL
+        , loadingPath : loadingPath
         }
 });
 

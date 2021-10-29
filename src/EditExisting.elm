@@ -4,6 +4,7 @@ import Api
 import Browser.Navigation as Navigation
 import Data.Project as Project
 import Edit
+import Flags exposing (Flags)
 import Html exposing (Html)
 import Http exposing (stringResolver)
 import Loading
@@ -16,40 +17,46 @@ type alias Model =
     Edit.Model
 
 type alias Init =
-    { key : Navigation.Key
+    { flags : Flags
     , kcc : String
+    , key : Navigation.Key
     , lcc : String
     , pn : String
-    , sen : String
-    , candorUrl : String
     }
 
 init : Init -> (Model, Cmd Msg)
-init ( { key, kcc, lcc, pn, sen, candorUrl } as flags ) =
+init ( { flags, kcc, key, lcc, pn } as initValues ) =
     let
         ( editModel, editMsg ) =
-            Edit.init { key = key, kcc = kcc, lcc = lcc, pn = pn, candorUrl = candorUrl, model = Api.Loading }
+            Edit.init
+                { flags = flags
+                , kcc = kcc
+                , key = key
+                , lcc = lcc
+                , pn = pn
+                , model = Api.Loading
+                }
     in
     ( editModel
     , Cmd.batch
         [ Cmd.map EditMsg editMsg
-        , (fetchProject flags)
+        , (fetchProject initValues)
             |> Task.attempt CompletedProjectLoad
         , Task.perform (\_ -> PassedSlowLoadThreshold) Loading.slowThreshold
         ]
     )
 
 fetchProject : Init -> Task Http.Error Project.Model
-fetchProject { candorUrl, kcc, lcc, sen, pn } =
+fetchProject { flags, kcc, lcc, pn } =
     let
-        url = Builder.relative [candorUrl, "read", kcc, lcc, pn] []
+        url = Builder.relative [flags.candorUrl, "read", kcc, lcc, pn] []
     in
     Http.task
         { method = "GET"
         , headers = []
         , url = url
         , body = Http.emptyBody
-        , resolver = stringResolver ( Api.handleJsonResponse ( Project.projectDecoder sen ) )
+        , resolver = stringResolver ( Api.handleJsonResponse ( Project.projectDecoder flags.setupEditorName ) )
         , timeout = Nothing
         }
 

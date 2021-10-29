@@ -3,6 +3,7 @@ module Edit exposing (encodeProject, getProjectModel, Model, Modified(..), Msg(.
 import Api
 import Browser.Navigation as Navigation
 import Data.Project as Project
+import Flags exposing (Flags)
 import Html exposing (Html, button, div, h1, text)
 import Html.Attributes exposing (class, disabled)
 import Html.Events exposing (onClick)
@@ -22,35 +23,35 @@ type Modified a =
     | Dirty a
 
 type alias Model =
-    { candorUrl : String
+    { flags : Flags
     , knownContentCode : String
     , learningContentCode : String
+    , navigationKey : Navigation.Key
     , project : Modified (Api.Status Project.Model)
     , projectName : String
-    , navigationKey : Navigation.Key
     }
 
 type alias SaveResult =
     { id : String }
 
 type alias Init =
-    { key : Navigation.Key
+    { flags : Flags
     , kcc : String
+    , key : Navigation.Key
     , lcc : String
     , pn : String
-    , candorUrl : String
     , model : Api.Status Project.Model
     }
 
 init : Init -> (Model, Cmd Msg)
-init { key, kcc, lcc, pn, model, candorUrl } =
+init { key, kcc, lcc, pn, model, flags } =
     (
-        { candorUrl = candorUrl
+        { flags = flags
         , knownContentCode = kcc
         , learningContentCode = lcc
+        , navigationKey = key
         , project = Clean model
         , projectName = pn
-        , navigationKey = key
         }
         , Cmd.none
     )
@@ -150,7 +151,7 @@ storeSlideContents slideContents ( { project } as model ) =
             model
 
 update : Msg -> Model -> (Model, Cmd Msg)
-update msg ( { knownContentCode, learningContentCode, projectName, project, candorUrl } as model ) =
+update msg ( { knownContentCode, learningContentCode, projectName, project, flags } as model ) =
     case msg of
         Cancel ->
             ( model, Navigation.pushUrl model.navigationKey (Routes.routeToUrl Routes.Home) )
@@ -216,7 +217,7 @@ update msg ( { knownContentCode, learningContentCode, projectName, project, cand
                     ( { model | project = Dirty (Api.Updating projectModel) }
                     , Cmd.batch
                         [ encodeProject knownContentCode learningContentCode projectName projectModel
-                            |> saveProject candorUrl
+                            |> saveProject flags.candorUrl
                             |> Task.attempt CompletedProjectSave
                         , Task.perform (\_ -> PassedSlowSaveThreshold) Loading.slowThreshold
                         ]
@@ -287,7 +288,7 @@ loadedView model projectModel =
         ]
 
 view : Model -> Html Msg
-view ( {  project } as model ) =
+view ( {  project, flags } as model ) =
     case project of
         Clean (Api.Loaded projectModel) ->
             loadedView model projectModel
@@ -304,17 +305,17 @@ view ( {  project } as model ) =
         Clean Api.LoadingSlowly ->
             div
                 [ ]
-                [ Loading.icon ]
+                [ (Loading.icon flags.loadingPath) ]
 
         Dirty Api.LoadingSlowly ->
             div
                 [ ]
-                [ Loading.icon ]
+                [ (Loading.icon flags.loadingPath) ]
 
         Clean (Api.CreatingSlowly _) ->
             div
                 [ ]
-                [ Loading.icon ]
+                [ (Loading.icon flags.loadingPath) ]
 
         _ ->
             div

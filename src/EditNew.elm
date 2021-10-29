@@ -4,6 +4,7 @@ import Api
 import Browser.Navigation as Navigation
 import Data.Project as Project
 import Edit
+import Flags exposing (Flags)
 import Html exposing (Html)
 import Http exposing (jsonBody, stringResolver)
 import Json.Decode exposing (Decoder, succeed, string)
@@ -22,25 +23,31 @@ type alias CreateResult =
     { id : String }
 
 type alias Init =
-    { candorUrl : String
-    , key : Navigation.Key
+    { flags : Flags
     , kcc : String
+    , key : Navigation.Key
     , lcc : String
     , pn : String
-    , sen : String
     }
 
 init : Init -> (Model, Cmd Msg)
-init { candorUrl, key, kcc, lcc, pn, sen } =
+init { flags, key, kcc, lcc, pn } =
     let
-        projectModel = Project.initNewProject sen
-        (editModel, editCommands) = Edit.init { key = key, kcc = kcc, lcc = lcc, pn = pn, candorUrl = candorUrl, model = Api.Creating projectModel }
+        projectModel = Project.initNewProject flags.setupEditorName
+        (editModel, editCommands) = Edit.init
+            { flags = flags
+            , key = key
+            , kcc = kcc
+            , lcc = lcc
+            , model = Api.Creating projectModel
+            , pn = pn
+            }
     in
     ( editModel
     , Cmd.batch
         [ Cmd.map EditMsg editCommands
         , Edit.encodeProject kcc lcc pn projectModel
-            |> createProject candorUrl
+            |> createProject flags.candorUrl
             |> Task.attempt CompletedProjectCreate
         , Task.perform (\_ -> PassedSlowCreateThreshold) Loading.slowThreshold
         ]

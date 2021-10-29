@@ -7,6 +7,7 @@ import Create
 import Edit
 import EditExisting
 import EditNew
+import Flags exposing (Flags)
 import Html exposing (Html, div, h1, text)
 import Html.Attributes exposing (class)
 import Http exposing (Response)
@@ -63,10 +64,6 @@ type alias Model =
     , procModel : (Procedure.Program.Model Msg)
     , flags : Flags
     }
-
-type alias Flags =
-    { setupEditorName: String
-    , candorUrl: String }
 
 initialModel : Navigation.Key -> Flags -> Model
 initialModel navigationKey flags =
@@ -140,7 +137,7 @@ setNewPage maybeRoute ( { navigationKey, flags } as model ) =
             let
                 ( openModel, openCmd ) =
                     Open.init
-                        navigationKey flags.candorUrl <|
+                        navigationKey flags <|
                         case model.languages of
                             Api.Loaded languages ->
                                 languages
@@ -155,7 +152,13 @@ setNewPage maybeRoute ( { navigationKey, flags } as model ) =
                 Just projectName ->
                     let
                         ( editModel, editCmd ) =
-                            EditNew.init { key = navigationKey, kcc = k, lcc = l, pn =  projectName, candorUrl = flags.candorUrl, sen = flags.setupEditorName }
+                            EditNew.init
+                                { flags = flags
+                                , kcc = k
+                                , key = navigationKey
+                                , lcc = l
+                                , pn =  projectName
+                                }
                     in
                     ( { model | page = Edit editModel }
                     , Cmd.map EditNewMsg editCmd )
@@ -167,7 +170,13 @@ setNewPage maybeRoute ( { navigationKey, flags } as model ) =
                 Just projectName ->
                     let
                         ( editModel, editCmd ) =
-                            EditExisting.init { key = navigationKey, kcc = k, lcc = l, pn = projectName, candorUrl = flags.candorUrl, sen = flags.setupEditorName }
+                            EditExisting.init
+                                { flags = flags
+                                , key = navigationKey
+                                , kcc = k
+                                , lcc = l
+                                , pn = projectName
+                                }
                     in
                     ( { model | page = Edit editModel }
                     , Cmd.map EditExistingMsg editCmd )
@@ -363,7 +372,7 @@ viewHeader page =
                 ]
 
 viewContent : Model -> ( String, Html Msg )
-viewContent { page, languages } =
+viewContent { flags, page, languages } =
     let
         contents =
             case languages of
@@ -371,7 +380,7 @@ viewContent { page, languages } =
                     div [] []
 
                 Api.LoadingSlowly ->
-                    div [] [ Loading.icon ]
+                    div [] [ ( Loading.icon flags.loadingPath ) ]
 
                 Api.Failed ->
                     div [] [ Loading.error "languages" ]
