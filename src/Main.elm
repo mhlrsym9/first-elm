@@ -4,6 +4,7 @@ import Api
 import Browser exposing (Document, UrlRequest)
 import Browser.Navigation as Navigation
 import Create
+import Delete
 import Edit
 import EditExisting
 import EditNew
@@ -51,11 +52,12 @@ subscriptions model =
 ---- MODEL ----
 
 type Page
-    = Start Start.Model
-    | Create Create.Model
+    = Create Create.Model
+    | Delete Delete.Model
     | Open Open.Model
     | Edit Edit.Model
     | NotFound
+    | Start Start.Model
 
 type alias Model =
     { page : Page
@@ -96,6 +98,7 @@ type Msg
     = CompletedLanguageLoad (Result Http.Error LanguageSelect.Languages)
     | ConsoleOut String
     | CreateMsg Create.Msg
+    | DeleteMsg Delete.Msg
     | Dirty Bool
     | EditExistingMsg EditExisting.Msg
     | EditMsg Edit.Msg
@@ -111,14 +114,6 @@ type Msg
 setNewPage : Maybe Routes.Route -> Model -> ( Model, Cmd Msg )
 setNewPage maybeRoute ( { navigationKey, flags } as model ) =
     case maybeRoute of
-        Just Routes.Home ->
-            let
-                ( startModel, startCmd ) =
-                    Start.init navigationKey
-            in
-            ( { model | page = Start startModel }
-            , Cmd.map StartMsg startCmd )
-
         Just Routes.Create ->
             let
                 ( createModel, createCmd ) =
@@ -133,19 +128,24 @@ setNewPage maybeRoute ( { navigationKey, flags } as model ) =
             ( { model | page = Create createModel }
             , Cmd.map CreateMsg createCmd )
 
-        Just Routes.Open ->
-            let
-                ( openModel, openCmd ) =
-                    Open.init
-                        navigationKey flags <|
-                        case model.languages of
-                            Api.Loaded languages ->
-                                languages
-                            _ ->
-                                []
-            in
-            ( { model | page = Open openModel }
-            , Cmd.map OpenMsg openCmd )
+        Just (Routes.Delete k l p) ->
+            case p of
+                Just projectName ->
+                    let
+                        ( deleteModel, deleteCommand ) =
+                            Delete.init
+                                { flags = flags
+                                , kcc = k
+                                , key = navigationKey
+                                , lcc = l
+                                , pn =  projectName
+                                }
+                    in
+                    ( { model | page = Delete deleteModel }
+                    , Cmd.map DeleteMsg deleteCommand )
+
+                Nothing ->
+                    ( model, Cmd.none )
 
         Just (Routes.EditNew k l p) ->
             case p of
@@ -183,6 +183,28 @@ setNewPage maybeRoute ( { navigationKey, flags } as model ) =
                 Nothing ->
                     ( model, Cmd.none )
 
+        Just Routes.Home ->
+            let
+                ( startModel, startCmd ) =
+                    Start.init navigationKey
+            in
+            ( { model | page = Start startModel }
+            , Cmd.map StartMsg startCmd )
+
+        Just Routes.Open ->
+            let
+                ( openModel, openCmd ) =
+                    Open.init
+                        navigationKey flags <|
+                        case model.languages of
+                            Api.Loaded languages ->
+                                languages
+                            _ ->
+                                []
+            in
+            ( { model | page = Open openModel }
+            , Cmd.map OpenMsg openCmd )
+
         Nothing ->
             ( { model | page = NotFound }, Cmd.none )
 
@@ -218,6 +240,18 @@ update msg model =
             ( { model | page = Create updatedCreateModel }
             , Cmd.map CreateMsg createCmd
             )
+
+        ( DeleteMsg deleteMsg, Delete deleteModel ) ->
+            let
+                ( updatedDeleteModel, deleteCmd ) =
+                    Delete.update deleteMsg deleteModel
+            in
+            ( { model | page = Delete updatedDeleteModel }
+            , Cmd.map DeleteMsg deleteCmd
+            )
+
+        ( DeleteMsg _, _ ) ->
+            ( model, Cmd.none )
 
         ( CreateMsg _, _ ) ->
 --            Debug.todo "Handle CreateMsg error case"
@@ -347,21 +381,21 @@ viewStandardHeader header =
 viewHeader : Page -> Html Msg
 viewHeader page =
     case page of
-        Start startModel ->
-            Start.view startModel
-                |> Html.map StartMsg
-
         Create createModel ->
             Create.view createModel
                 |> Html.map CreateMsg
 
-        Open openModel ->
-            Open.view openModel
-                |> Html.map OpenMsg
+        Delete deleteModel ->
+            Delete.view deleteModel
+                |> Html.map DeleteMsg
 
         Edit editModel ->
             Edit.view editModel
                 |> Html.map EditMsg
+
+        Open openModel ->
+            Open.view openModel
+                |> Html.map OpenMsg
 
         NotFound ->
             div
@@ -370,6 +404,10 @@ viewHeader page =
                     []
                     [ text "Page Not Found" ]
                 ]
+
+        Start startModel ->
+            Start.view startModel
+                |> Html.map StartMsg
 
 viewContent : Model -> ( String, Html Msg )
 viewContent { flags, page, languages } =

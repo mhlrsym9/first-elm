@@ -7,20 +7,22 @@ import Url.Parser as Parser exposing ((</>), (<?>), Parser)
 import Url.Parser.Query as Query
 
 type Route
-    = Home
-    | Create
-    | Open
+    = Create
+    | Delete String String (Maybe String)
     | EditNew String String (Maybe String)
     | EditExisting String String (Maybe String)
+    | Home
+    | Open
 
 routes : Parser (Route -> a) a
 routes =
     Parser.oneOf
-        [ Parser.map Home Parser.top
-        , Parser.map Create (Parser.s "create")
-        , Parser.map Open (Parser.s "open")
+        [ Parser.map Create (Parser.s "create")
+        , Parser.map Delete (Parser.s "delete" </> Parser.string </> Parser.string <?> Query.string "projectName")
         , Parser.map EditNew (Parser.s "edit" </> Parser.s "new" </> Parser.string </> Parser.string <?> Query.string "projectName")
         , Parser.map EditExisting (Parser.s "edit" </> Parser.s "existing" </> Parser.string </> Parser.string <?> Query.string "projectName")
+        , Parser.map Home Parser.top
+        , Parser.map Open (Parser.s "open")
         ]
 
 match : Url -> Maybe Route
@@ -30,14 +32,16 @@ match url =
 routeToUrl : Route -> String
 routeToUrl route =
     case route of
-        Home ->
-            "/"
-
         Create ->
             "/create"
 
-        Open ->
-            "/open"
+        Delete k l p ->
+            case p of
+                Just projectName ->
+                    "/delete/" ++ k ++ "/" ++ l ++ "?" ++ "projectName=" ++ projectName
+
+                Nothing ->
+                    "/delete/" ++ k ++ "/" ++ l
 
         EditNew k l p ->
             case p of
@@ -54,6 +58,12 @@ routeToUrl route =
 
                 Nothing ->
                     "/edit/existing/" ++ k ++ "/" ++ l
+
+        Home ->
+            "/"
+
+        Open ->
+            "/open"
 
 href : Route -> Html.Attribute msg
 href route =

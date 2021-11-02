@@ -3,10 +3,9 @@ module Open exposing (Model, Msg, init, update, view)
 import Api
 import Browser.Navigation as Navigation
 import Flags exposing (Flags)
-import Html exposing (Html, button, div, label, option, select, text)
-import Html.Attributes exposing (attribute, class, disabled, id, name, size, value)
+import Html exposing (Html, button, div, h3, table, text, tr)
+import Html.Attributes exposing (class)
 import Html.Events exposing (onClick)
-import Html.Events.Extra exposing (onChange)
 import Http exposing (stringResolver)
 import Json.Decode exposing (Decoder, decodeString, list, string, succeed)
 import Json.Decode.Pipeline exposing (required)
@@ -105,13 +104,14 @@ fetchProjects candorUrl =
 -- UPDATE
 
 type Msg
-    = KnownLanguageMsg LanguageSelect.Msg
-    | LearningLanguageMsg LanguageSelect.Msg
-    | PassedSlowLoadThreshold
+    = Cancel
     | CompletedProjectDescriptorsLoad (Result Http.Error ProjectDescriptions)
+    | Delete String
+    | KnownLanguageMsg LanguageSelect.Msg
+    | LearningLanguageMsg LanguageSelect.Msg
+    | Open String
+    | PassedSlowLoadThreshold
     | UpdateProject String
-    | Open
-    | Cancel
 
 extractContentCodes : ProjectDescriptions -> (ProjectDescription -> String) -> List String
 extractContentCodes pds f =
@@ -201,9 +201,52 @@ justPassthroughLearningLanguagesFilter learningLanguageMsg data =
     , Cmd.map LearningLanguageMsg updatedCmd
     )
 
+processProjectKey : String -> Navigation.Key -> (String -> String -> Maybe String -> Routes.Route) -> Cmd Msg
+processProjectKey projectKey navigationKey route =
+    let
+        r = decodeString projectDescriptionDecoder projectKey
+    in
+    case r of
+        Ok { l1, l2, project } ->
+            Navigation.pushUrl
+                navigationKey <|
+                Routes.routeToUrl <|
+                    route l1 l2 (Just project)
+
+        Err _ ->
+            Cmd.none
+
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
     case ( msg, model ) of
+        ( Cancel, Success { navigationKey } ) ->
+            ( model, Navigation.pushUrl navigationKey (Routes.routeToUrl Routes.Home) )
+
+        ( CompletedProjectDescriptorsLoad result, Success data ) ->
+            case result of
+                Ok projectDescriptions ->
+                    let
+                        uniqueKnownContentCodes =
+                            extractContentCodes projectDescriptions (\{ l1 } -> l1)
+                        uniqueLearningContentCodes =
+                            extractContentCodes projectDescriptions (\{ l2 } -> l2)
+                    in
+                    ( Success
+                        { data | projectDescriptions = Api.Loaded projectDescriptions
+                        , displayedProjectDescriptions = projectDescriptions
+                        }
+                    , Cmd.batch
+                        [ Cmd.map KnownLanguageMsg (LanguageSelect.alwaysSetAvailableLanguages uniqueKnownContentCodes data.knownLanguageModel)
+                        , Cmd.map LearningLanguageMsg (LanguageSelect.alwaysSetAvailableLanguages uniqueLearningContentCodes data.learningLanguageModel)
+                        ]
+                    )
+
+                Err _ ->
+                    ( Success { data | projectDescriptions = Api.Failed }, Cmd.none )
+
+        ( Delete projectKey, Success { navigationKey } ) ->
+            ( model , processProjectKey projectKey navigationKey Routes.Delete )
+
         ( KnownLanguageMsg knownLanguageMsg, Success data ) ->
             case data.projectDescriptions of
                 Api.Loaded _ ->
@@ -230,27 +273,8 @@ update msg model =
                 _ ->
                     justPassthroughLearningLanguagesFilter learningLanguageMsg data
 
-        ( CompletedProjectDescriptorsLoad result, Success data ) ->
-            case result of
-                Ok projectDescriptions ->
-                    let
-                        uniqueKnownContentCodes =
-                            extractContentCodes projectDescriptions (\{ l1 } -> l1)
-                        uniqueLearningContentCodes =
-                            extractContentCodes projectDescriptions (\{ l2 } -> l2)
-                    in
-                    ( Success
-                        { data | projectDescriptions = Api.Loaded projectDescriptions
-                        , displayedProjectDescriptions = projectDescriptions
-                        }
-                    , Cmd.batch
-                        [ Cmd.map KnownLanguageMsg (LanguageSelect.alwaysSetAvailableLanguages uniqueKnownContentCodes data.knownLanguageModel)
-                        , Cmd.map LearningLanguageMsg (LanguageSelect.alwaysSetAvailableLanguages uniqueLearningContentCodes data.learningLanguageModel)
-                        ]
-                    )
-
-                Err _ ->
-                    ( Success { data | projectDescriptions = Api.Failed }, Cmd.none )
+        ( Open projectKey, Success { navigationKey } ) ->
+            ( model, processProjectKey projectKey navigationKey Routes.EditExisting )
 
         ( PassedSlowLoadThreshold, Success data ) ->
             let
@@ -269,51 +293,38 @@ update msg model =
         ( UpdateProject project, Success data ) ->
             ( Success { data | chosenProject = Just project }, Cmd.none )
 
-        ( Open, Success { chosenProject, navigationKey } ) ->
-            case chosenProject of
-                Just chosenProjectStr ->
-                    let
-                        r = decodeString projectDescriptionDecoder chosenProjectStr
-                    in
-                    case r of
-                        Ok { l1, l2, project } ->
-                            ( model
-                            , Navigation.pushUrl
-                                navigationKey
-                                ( Routes.routeToUrl
-                                    ( Routes.EditExisting l1 l2 (Just project) )
-                                )
-                            )
-
-                        Err _ ->
-                            ( model, Cmd.none )
-
-                Nothing ->
-                    ( model, Cmd.none )
-
-        ( Cancel, Success { navigationKey } ) ->
-            ( model, Navigation.pushUrl navigationKey (Routes.routeToUrl Routes.Home) )
-
 -- VIEW
 
-isOpenButtonDisabled : Maybe String -> Bool
-isOpenButtonDisabled projectName =
-    case projectName of
-        Just _ ->
-            False
-        Nothing ->
-            True
+viewProjectsHeader : Html Msg
+viewProjectsHeader =
+    h3
+        [ class "open-page-projects-header" ]
+        [ text "Projects" ]
 
 viewProjectDescription : ProjectDescription -> Html Msg
 viewProjectDescription ( { project } as pd ) =
     let
         key = Encode.encode 0 ( encodeProjectDescription pd )
     in
-    option
-        [ (attribute "key" key)
-        , value key
+    tr
+        [ ]
+        [ div
+            [ ]
+            [ text project
+            , button
+                [ onClick ( Open key ) ]
+                [ text "Edit" ]
+            , button
+                [ onClick ( Delete key ) ]
+                [ text "Delete" ]
+            ]
         ]
-        [ text project ]
+
+viewProjectsTable : ProjectDescriptions -> Html Msg
+viewProjectsTable displayedProjectDescriptions =
+    table
+        [ class "open-page-projects-table" ]
+        (List.map viewProjectDescription displayedProjectDescriptions)
 
 view : Model -> Html Msg
 view model =
@@ -331,35 +342,21 @@ view model =
 
                 Api.Loaded _ ->
                     div
-                        [ class "create-page" ]
+                        [ class "open-page" ]
                         [ ViewHelpers.viewLanguageSelect "Filter Projects by L1" KnownLanguageMsg knownLanguageModel
                         , ViewHelpers.viewLanguageSelect "Filter Projects by L2" LearningLanguageMsg learningLanguageModel
                         , div
-                            [ class "language-select" ]
-                            [
-                              label
-                                  [ ]
-                                  [ text ("Projects:")
-                                  , select
-                                        [ name "projects"
-                                        , id "projects"
-                                        , size 5
-                                        , onChange UpdateProject
-                                        ]
-                                        (List.map viewProjectDescription displayedProjectDescriptions)
-                                  ]
+                            [ class "open-page-projects" ]
+                            [ viewProjectsHeader
+                            , viewProjectsTable displayedProjectDescriptions
                             ]
                         , div
                             [ ]
                             [ button
-                                [ disabled (isOpenButtonDisabled chosenProject)
-                                , onClick Open ]
-                                [ text "Open" ]
-                            , button
                                 [ onClick Cancel ]
                                 [ text "Cancel" ]
                             ]
-                         ]
+                        ]
 
                 _ ->
                     div [ ] [ ]
