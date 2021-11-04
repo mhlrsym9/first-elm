@@ -11,6 +11,8 @@ type Route
     | Delete String String (Maybe String)
     | EditNew String String (Maybe String)
     | EditExisting String String (Maybe String)
+    | GenerateAlphabet String String (Maybe String)
+    | GenerateCourseWare String String (Maybe String)
     | Home
     | Open
 
@@ -21,6 +23,8 @@ routes =
         , Parser.map Delete (Parser.s "delete" </> Parser.string </> Parser.string <?> Query.string "projectName")
         , Parser.map EditNew (Parser.s "edit" </> Parser.s "new" </> Parser.string </> Parser.string <?> Query.string "projectName")
         , Parser.map EditExisting (Parser.s "edit" </> Parser.s "existing" </> Parser.string </> Parser.string <?> Query.string "projectName")
+        , Parser.map GenerateAlphabet (Parser.s "generate" </> Parser.s "alphabet" </> Parser.string </> Parser.string <?> Query.string "projectName")
+        , Parser.map GenerateCourseWare (Parser.s "generate" </> Parser.s "cw" </> Parser.string </> Parser.string <?> Query.string "projectName")
         , Parser.map Home Parser.top
         , Parser.map Open (Parser.s "open")
         ]
@@ -58,6 +62,22 @@ routeToUrl route =
 
                 Nothing ->
                     "/edit/existing/" ++ k ++ "/" ++ l
+
+        GenerateAlphabet k l p ->
+            case p of
+                Just projectName ->
+                    "/generate/alphabet/" ++ k ++ "/" ++ l ++ "?" ++ "projectName=" ++ projectName
+
+                Nothing ->
+                    "/generate/alphabet/" ++ k ++ "/" ++ l
+
+        GenerateCourseWare k l p ->
+            case p of
+                Just projectName ->
+                    "/generate/cw/" ++ k ++ "/" ++ l ++ "?" ++ "projectName=" ++ projectName
+
+                Nothing ->
+                    "/generate/cw/" ++ k ++ "/" ++ l
 
         Home ->
             "/"

@@ -11,11 +11,14 @@ import Json.Decode exposing (Decoder, succeed)
 import Json.Decode.Extra exposing (indexedList)
 import Json.Decode.Pipeline exposing (hardcoded, required)
 import Json.Encode as Encode
+import Random
+import UUID exposing (Seeds)
 
 type alias Model =
     { slideIndex : Int
     , setupEditorName : String
     , slides : Dict Int Slide.Model
+    , seeds : Seeds
     }
 
 slideDecoder : String -> Int -> Decoder (Int, Slide.Model)
@@ -28,12 +31,22 @@ slidesDecoder sen =
     (indexedList (slideDecoder sen))
         |> Json.Decode.map (\l -> Dict.fromList l)
 
+initialSeeds : Seeds
+initialSeeds =
+    (Seeds
+        (Random.initialSeed 12345)
+        (Random.initialSeed 23456)
+        (Random.initialSeed 34567)
+        (Random.initialSeed 45678)
+    )
+
 projectDecoder : String -> Decoder Model
 projectDecoder sen =
     succeed Model
         |> hardcoded 0
         |> hardcoded sen
         |> required "slides" (slidesDecoder sen)
+        |> hardcoded initialSeeds
 
 encodeProject : Model -> Encode.Value
 encodeProject { slides } =
@@ -41,11 +54,26 @@ encodeProject { slides } =
 
 init : String -> (Model, Cmd Msg)
 init sen =
-    ( { slideIndex = 0, slides = Dict.empty, setupEditorName = sen }, Cmd.none )
+    (
+        { slideIndex = 0
+        , slides = Dict.empty
+        , setupEditorName = sen
+        , seeds = initialSeeds
+        }
+        , Cmd.none
+    )
 
 initNewProject : String -> Model
 initNewProject sen =
-    { slideIndex = 0, slides = createNewSlide 0 sen, setupEditorName = sen }
+    let
+        seeds = initialSeeds
+        (slides, updatedSeeds) = createNewSlide 0 sen seeds
+    in
+    { slideIndex = 0
+    , slides = slides
+    , setupEditorName = sen
+    , seeds = updatedSeeds
+    }
 
 updateSlideIndexes : Dict Int Slide.Model -> Dict Int Slide.Model
 updateSlideIndexes slides =
@@ -65,27 +93,29 @@ type Msg =
     | SlideMsg Slide.Msg
     | UpdateCurrentSlideContents Msg
 
-createNewSlide : Int -> String -> Dict Int Slide.Model
-createNewSlide slideIndex sen =
+createNewSlide : Int -> String -> Seeds -> (Dict Int Slide.Model, Seeds)
+createNewSlide slideIndex sen seeds =
     let
+        (uuid, updatedSeeds) = UUID.step seeds
         newSlide =
-            Slide.init { slideIndex = slideIndex, sen = sen }
+            Slide.init { slideIndex = slideIndex, sen = sen, slideId = UUID.toString uuid }
     in
-    Dict.singleton slideIndex newSlide
+    ( Dict.singleton slideIndex newSlide, updatedSeeds )
 
 insertSlideAtSlicePoint : Int -> Model -> Model
-insertSlideAtSlicePoint slicePoint ( { slides, setupEditorName } as model ) =
+insertSlideAtSlicePoint slicePoint ( { slides, setupEditorName, seeds } as model ) =
     let
         (beforeSlides, afterSlides) = Dict.partition (\i _ -> (i < slicePoint)) slides
-        newSlides = createNewSlide slicePoint setupEditorName
+        (newSlides, updatedSeeds) = createNewSlide (Debug.log "slicePoint is " slicePoint) setupEditorName seeds
         updatedSlides =
-            afterSlides
+            (Debug.log "afterSlides are before " afterSlides)
                 |> Dict.Extra.mapKeys (\k -> k + 1)
                 |> updateSlideIndexes
+                |> Debug.log "afterSlides are after "
                 |> Dict.union newSlides
                 |> Dict.union beforeSlides
     in
-    { model | slides = updatedSlides, slideIndex = slicePoint }
+    { model | slides = (Debug.log "updatedSlides are " updatedSlides), slideIndex = slicePoint, seeds = updatedSeeds }
 
 storeSlideContents : String -> Model -> Model
 storeSlideContents slideContents ( { slideIndex, slides } as projectModel ) =
@@ -131,7 +161,7 @@ update msg ( { slideIndex, slides } as model ) =
             insertSlideAtSlicePoint (slideIndex + 1) model
 
         InsertSlide ProjectHelpers.Bottom ->
-            insertSlideAtSlicePoint ((Dict.size slides) - 1) model
+            insertSlideAtSlicePoint (Dict.size slides) model
 
         Move ProjectHelpers.Top ->
             let
@@ -268,7 +298,7 @@ viewInsertAtTopButton =
         [ class "slide-button"
         , onClick ( UpdateCurrentSlideContents ( InsertSlide ProjectHelpers.Top ) )
         ]
-        [ text "<<- Insert new slide before first slide"]
+        [ text "<<- Add new slide before first slide"]
 
 viewInsertBeforeSlideButton : Html Msg
 viewInsertBeforeSlideButton =
@@ -276,7 +306,7 @@ viewInsertBeforeSlideButton =
         [ class "slide-button"
         , onClick ( UpdateCurrentSlideContents ( InsertSlide ProjectHelpers.Up ) )
         ]
-        [ text "<- Insert new slide before this slide"]
+        [ text "<- Add new slide before this slide"]
 
 viewInsertAfterSlideButton : Html Msg
 viewInsertAfterSlideButton =
@@ -292,7 +322,7 @@ viewInsertAtBottomButton =
         [ class "slide-button"
         , onClick ( UpdateCurrentSlideContents ( InsertSlide ProjectHelpers.Bottom ) )
         ]
-        [ text "Insert new slide after last slide ->>"]
+        [ text "Add new slide after last slide ->>"]
 
 viewInsertSlideActionRow : Html Msg
 viewInsertSlideActionRow =

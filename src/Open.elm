@@ -2,6 +2,7 @@ module Open exposing (Model, Msg, init, update, view)
 
 import Api
 import Browser.Navigation as Navigation
+import File.Download as Download
 import Flags exposing (Flags)
 import Html exposing (Html, button, div, h3, table, text, tr)
 import Html.Attributes exposing (class)
@@ -103,10 +104,15 @@ fetchProjects candorUrl =
 
 -- UPDATE
 
+type ImageRepository
+    = Alphabet
+    | CourseWare
+
 type Msg
     = Cancel
     | CompletedProjectDescriptorsLoad (Result Http.Error ProjectDescriptions)
     | Delete String
+    | Generate ImageRepository String
     | KnownLanguageMsg LanguageSelect.Msg
     | LearningLanguageMsg LanguageSelect.Msg
     | Open String
@@ -247,6 +253,17 @@ update msg model =
         ( Delete projectKey, Success { navigationKey } ) ->
             ( model , processProjectKey projectKey navigationKey Routes.Delete )
 
+        ( Generate imageRepository projectKey, Success { navigationKey } ) ->
+            let
+                f = processProjectKey projectKey navigationKey
+            in
+            case imageRepository of
+                Alphabet ->
+                    ( model, f Routes.GenerateAlphabet )
+
+                CourseWare ->
+                    (model, f Routes.GenerateCourseWare )
+
         ( KnownLanguageMsg knownLanguageMsg, Success data ) ->
             case data.projectDescriptions of
                 Api.Loaded _ ->
@@ -317,7 +334,12 @@ viewProjectDescription ( { project } as pd ) =
             , button
                 [ onClick ( Delete key ) ]
                 [ text "Delete" ]
-            ]
+            , button
+                [ onClick ( Generate Alphabet key ) ]
+                [ text "Generate Alphabet Slides" ]
+            , button
+                [ onClick ( Generate CourseWare key ) ]
+                [ text "Generate CourseWare Slides" ]]
         ]
 
 viewProjectsTable : ProjectDescriptions -> Html Msg

@@ -274,7 +274,7 @@ viewActionButtons model =
         [ viewSaveButton model
         , button
             [ onClick Cancel ]
-            [ text "Cancel" ]
+            [ text "Return to Home Screen" ]
         ]
 
 loadedView : Model -> Project.Model -> Html Msg

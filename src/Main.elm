@@ -9,6 +9,9 @@ import Edit
 import EditExisting
 import EditNew
 import Flags exposing (Flags)
+import Generate
+import GenerateAlphabet
+import GenerateCourseWare
 import Html exposing (Html, div, h1, text)
 import Html.Attributes exposing (class)
 import Http exposing (Response)
@@ -54,8 +57,9 @@ subscriptions model =
 type Page
     = Create Create.Model
     | Delete Delete.Model
-    | Open Open.Model
     | Edit Edit.Model
+    | Generate Generate.Model
+    | Open Open.Model
     | NotFound
     | Start Start.Model
 
@@ -103,6 +107,7 @@ type Msg
     | EditExistingMsg EditExisting.Msg
     | EditMsg Edit.Msg
     | EditNewMsg EditNew.Msg
+    | GenerateMsg Generate.Msg
     | NewRoute (Maybe Routes.Route)
     | OpenMsg Open.Msg
     | PassedSlowLoadThreshold
@@ -162,6 +167,7 @@ setNewPage maybeRoute ( { navigationKey, flags } as model ) =
                     in
                     ( { model | page = Edit editModel }
                     , Cmd.map EditNewMsg editCmd )
+
                 Nothing ->
                     ( model, Cmd.none )
 
@@ -180,6 +186,45 @@ setNewPage maybeRoute ( { navigationKey, flags } as model ) =
                     in
                     ( { model | page = Edit editModel }
                     , Cmd.map EditExistingMsg editCmd )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        Just (Routes.GenerateAlphabet k l p) ->
+            case p of
+                Just projectName ->
+                    let
+                        ( generateModel, generateCmd ) =
+                            GenerateAlphabet.init
+                                { flags = flags
+                                , key = navigationKey
+                                , kcc = k
+                                , lcc = l
+                                , pn = projectName
+                                }
+                    in
+                    ( { model | page = Generate generateModel }
+                    , Cmd.map GenerateMsg generateCmd )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        Just (Routes.GenerateCourseWare k l p) ->
+            case p of
+                Just projectName ->
+                    let
+                        ( generateModel, generateCmd ) =
+                            GenerateCourseWare.init
+                                { flags = flags
+                                , key = navigationKey
+                                , kcc = k
+                                , lcc = l
+                                , pn = projectName
+                                }
+                    in
+                    ( { model | page = Generate generateModel }
+                    , Cmd.map GenerateMsg generateCmd )
+
                 Nothing ->
                     ( model, Cmd.none )
 
@@ -308,6 +353,18 @@ update msg model =
 --            Debug.todo "Handle EditNewMsg error case"
             ( model, Cmd.none )
 
+        ( GenerateMsg generateMsg, Generate generateModel ) ->
+            let
+                ( updatedGenerateModel, generateCommands ) =
+                    Generate.update generateMsg generateModel
+            in
+            ( { model | page = Generate updatedGenerateModel }
+            , Cmd.map GenerateMsg generateCommands
+            )
+
+        ( GenerateMsg _, _ ) ->
+            ( model, Cmd.none )
+
         ( NewRoute maybeRoute, _ ) ->
             setNewPage maybeRoute model
 
@@ -392,6 +449,10 @@ viewHeader page =
         Edit editModel ->
             Edit.view editModel
                 |> Html.map EditMsg
+
+        Generate generateModel ->
+            Generate.view generateModel
+                |> Html.map GenerateMsg
 
         Open openModel ->
             Open.view openModel
