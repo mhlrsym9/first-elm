@@ -1,4 +1,4 @@
-module Data.Project exposing (encodeProject, establishIndexes, projectDecoder, init, initNewProject, Model, Msg(..), storeSlideContents, update, view)
+module Data.Project exposing (encodeProject, establishIndexes, establishSlideUUIDs, projectDecoder, init, initNewProject, Model, Msg(..), storeSlideContents, update, view)
 
 import Data.ProjectHelpers as ProjectHelpers
 import Data.Slide as Slide
@@ -83,6 +83,21 @@ establishIndexes : Model -> Model
 establishIndexes ( { slides } as model ) =
     { model | slides = Dict.map (\i s -> Slide.establishIndexes i s) slides }
 
+establishSlideUUID : Int -> Slide.Model -> (Dict Int Slide.Model, Seeds) -> (Dict Int Slide.Model, Seeds)
+establishSlideUUID index slideModel ( dict, seeds ) =
+    let
+        (uuid, updatedSeeds) = UUID.step seeds
+        updatedSlide = { slideModel | slideId = UUID.toString uuid }
+    in
+    ( Dict.insert index updatedSlide dict, updatedSeeds )
+
+establishSlideUUIDs : Model -> Model
+establishSlideUUIDs ( { seeds, slides } as model ) =
+    let
+        (updatedSlides, updatedSeeds) = Dict.foldl establishSlideUUID (Dict.empty, seeds) slides
+    in
+    { model | slides = updatedSlides, seeds = updatedSeeds }
+
 -- UPDATE
 
 type Msg =
@@ -106,16 +121,15 @@ insertSlideAtSlicePoint : Int -> Model -> Model
 insertSlideAtSlicePoint slicePoint ( { slides, setupEditorName, seeds } as model ) =
     let
         (beforeSlides, afterSlides) = Dict.partition (\i _ -> (i < slicePoint)) slides
-        (newSlides, updatedSeeds) = createNewSlide (Debug.log "slicePoint is " slicePoint) setupEditorName seeds
+        (newSlides, updatedSeeds) = createNewSlide slicePoint setupEditorName seeds
         updatedSlides =
-            (Debug.log "afterSlides are before " afterSlides)
+            afterSlides
                 |> Dict.Extra.mapKeys (\k -> k + 1)
                 |> updateSlideIndexes
-                |> Debug.log "afterSlides are after "
                 |> Dict.union newSlides
                 |> Dict.union beforeSlides
     in
-    { model | slides = (Debug.log "updatedSlides are " updatedSlides), slideIndex = slicePoint, seeds = updatedSeeds }
+    { model | slides = updatedSlides, slideIndex = slicePoint, seeds = updatedSeeds }
 
 storeSlideContents : String -> Model -> Model
 storeSlideContents slideContents ( { slideIndex, slides } as projectModel ) =

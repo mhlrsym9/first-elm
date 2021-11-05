@@ -74,7 +74,9 @@ update msg model =
             case result of
                 Ok project ->
                     let
-                        updatedProject = Project.establishIndexes project
+                        updatedProject = project
+                            |> Project.establishIndexes
+                            |> Project.establishSlideUUIDs
                     in
                     ( { model | project = Edit.Clean (Api.Loaded updatedProject) }
                     , Cmd.none
