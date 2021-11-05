@@ -23,7 +23,7 @@ type Modified a =
     | Dirty a
 
 type alias Model =
-    { flags : Flags
+    { flags : Flags.Model
     , knownContentCode : String
     , learningContentCode : String
     , navigationKey : Navigation.Key
@@ -35,7 +35,7 @@ type alias SaveResult =
     { id : String }
 
 type alias Init =
-    { flags : Flags
+    { flags : Flags.Model
     , kcc : String
     , key : Navigation.Key
     , lcc : String

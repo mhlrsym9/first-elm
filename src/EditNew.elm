@@ -1,7 +1,6 @@
 module EditNew exposing (Model, Msg, init, update, view)
 
 import Api
-import Browser.Navigation as Navigation
 import Data.Project as Project
 import Edit
 import Flags exposing (Flags)
@@ -11,6 +10,7 @@ import Json.Decode exposing (Decoder, succeed, string)
 import Json.Decode.Pipeline exposing (required)
 import Json.Encode as Encode
 import Loading
+import ProjectAccess exposing (ProjectAccess)
 import Task exposing (Task)
 import Url.Builder as Builder
 
@@ -22,15 +22,7 @@ type alias Model =
 type alias CreateResult =
     { id : String }
 
-type alias Init =
-    { flags : Flags
-    , kcc : String
-    , key : Navigation.Key
-    , lcc : String
-    , pn : String
-    }
-
-init : Init -> (Model, Cmd Msg)
+init : ProjectAccess -> (Model, Cmd Msg)
 init { flags, key, kcc, lcc, pn } =
     let
         projectModel = Project.initNewProject flags.setupEditorName

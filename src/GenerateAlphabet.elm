@@ -1,23 +1,14 @@
 module GenerateAlphabet exposing (..)
 
-import Browser.Navigation as Navigation
-import Flags exposing (Flags)
 import Generate
+import ProjectAccess exposing (ProjectAccess)
 
 -- MODEL
 
 type alias Model =
     Generate.Model
 
-type alias Init =
-    { flags : Flags
-    , kcc : String
-    , key : Navigation.Key
-    , lcc : String
-    , pn : String
-    }
-
-init : Init -> (Model, Cmd Msg)
+init : ProjectAccess -> (Model, Cmd Msg)
 init { flags, key, kcc, lcc, pn } =
     Generate.init
         { flags = flags

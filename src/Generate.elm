@@ -33,7 +33,7 @@ type alias GenerationResult =
     { id : String }
 
 type alias Init =
-    { flags : Flags
+    { flags : Flags.Model
     , imageRepository : String
     , kcc : String
     , key : Navigation.Key

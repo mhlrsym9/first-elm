@@ -72,7 +72,7 @@ initialData navigationKey knownLanguageModel learningLanguageModel loadingPath =
     , navigationKey = navigationKey
     }
 
-init : Navigation.Key -> Flags -> LanguageSelect.Languages -> (Model, Cmd Msg)
+init : Navigation.Key -> Flags.Model -> LanguageSelect.Languages -> (Model, Cmd Msg)
 init key { loadingPath, candorUrl } languages =
     let
         ( knownLanguageModel, knownLanguageCmd ) =

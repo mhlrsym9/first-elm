@@ -4,6 +4,7 @@ import * as serviceWorker from './serviceWorker';
 import '@tinymce/tinymce-webcomponent';
 import {setupEditorName, extractEditorContents} from "./tinymce.js";
 import loadingPath from '../public/images/loading.svg'
+import metadata from './metadata.json'
 
 let app = Elm.Main.init({
     node: document.getElementById('root'),
@@ -11,6 +12,7 @@ let app = Elm.Main.init({
         { setupEditorName: setupEditorName()
         , candorUrl : process.env.ELM_APP_CANDOR_URL
         , loadingPath : loadingPath
+        , metadata: metadata
         }
 });
 

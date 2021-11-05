@@ -1,13 +1,12 @@
-module EditExisting exposing (Init, init, Msg, update)
+module EditExisting exposing (init, Msg, update)
 
 import Api
-import Browser.Navigation as Navigation
 import Data.Project as Project
 import Edit
-import Flags exposing (Flags)
 import Html exposing (Html)
 import Http exposing (stringResolver)
 import Loading
+import ProjectAccess exposing (ProjectAccess)
 import Task exposing (Task)
 import Url.Builder as Builder
 
@@ -16,15 +15,7 @@ import Url.Builder as Builder
 type alias Model =
     Edit.Model
 
-type alias Init =
-    { flags : Flags
-    , kcc : String
-    , key : Navigation.Key
-    , lcc : String
-    , pn : String
-    }
-
-init : Init -> (Model, Cmd Msg)
+init : ProjectAccess -> (Model, Cmd Msg)
 init ( { flags, kcc, key, lcc, pn } as initValues ) =
     let
         ( editModel, editMsg ) =
@@ -46,7 +37,7 @@ init ( { flags, kcc, key, lcc, pn } as initValues ) =
         ]
     )
 
-fetchProject : Init -> Task Http.Error Project.Model
+fetchProject : ProjectAccess -> Task Http.Error Project.Model
 fetchProject { flags, kcc, lcc, pn } =
     let
         url = Builder.relative [flags.candorUrl, "read", kcc, lcc, pn] []

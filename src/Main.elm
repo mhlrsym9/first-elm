@@ -68,7 +68,7 @@ type alias Model =
     , languages : Api.Status LanguageSelect.Languages
     , navigationKey : Navigation.Key
     , procModel : (Procedure.Program.Model Msg)
-    , flags : Flags
+    , flags : Flags.Model
     }
 
 initialModel : Navigation.Key -> Flags -> Model
@@ -77,7 +77,7 @@ initialModel navigationKey flags =
     , languages = Api.Loading
     , navigationKey = navigationKey
     , procModel = Procedure.Program.init
-    , flags = flags
+    , flags = Flags.init flags
     }
 
 init : Flags -> Url -> Navigation.Key -> ( Model, Cmd Msg )
@@ -435,40 +435,51 @@ viewStandardHeader : String -> Html Msg
 viewStandardHeader header =
     h1 [] [ text header ]
 
-viewHeader : Page -> Html Msg
-viewHeader page =
-    case page of
-        Create createModel ->
-            Create.view createModel
-                |> Html.map CreateMsg
+viewVersion : Flags.Model -> Html Msg
+viewVersion flags =
+    div
+        [ ]
+        [ text ( Flags.versionString flags ) ]
 
-        Delete deleteModel ->
-            Delete.view deleteModel
-                |> Html.map DeleteMsg
+viewHeader : Flags.Model -> Page -> Html Msg
+viewHeader flags page =
+    div
+        [ ]
+        [
+            case page of
+                Create createModel ->
+                    Create.view createModel
+                        |> Html.map CreateMsg
 
-        Edit editModel ->
-            Edit.view editModel
-                |> Html.map EditMsg
+                Delete deleteModel ->
+                    Delete.view deleteModel
+                        |> Html.map DeleteMsg
 
-        Generate generateModel ->
-            Generate.view generateModel
-                |> Html.map GenerateMsg
+                Edit editModel ->
+                    Edit.view editModel
+                        |> Html.map EditMsg
 
-        Open openModel ->
-            Open.view openModel
-                |> Html.map OpenMsg
+                Generate generateModel ->
+                    Generate.view generateModel
+                        |> Html.map GenerateMsg
 
-        NotFound ->
-            div
-                [ class "not-found" ]
-                [ h1
-                    []
-                    [ text "Page Not Found" ]
-                ]
+                Open openModel ->
+                    Open.view openModel
+                        |> Html.map OpenMsg
 
-        Start startModel ->
-            Start.view startModel
-                |> Html.map StartMsg
+                NotFound ->
+                    div
+                        [ class "not-found" ]
+                        [ h1
+                            []
+                            [ text "Page Not Found" ]
+                        ]
+
+                Start startModel ->
+                    Start.view startModel
+                        |> Html.map StartMsg
+            , viewVersion flags
+        ]
 
 viewContent : Model -> ( String, Html Msg )
 viewContent { flags, page, languages } =
@@ -485,7 +496,7 @@ viewContent { flags, page, languages } =
                     div [] [ Loading.error "languages" ]
 
                 Api.Loaded _ ->
-                    viewHeader page
+                    viewHeader flags page
 
                 _ ->
                     div [] []

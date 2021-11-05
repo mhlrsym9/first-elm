@@ -10,6 +10,7 @@ import Http exposing (stringResolver)
 import Json.Decode exposing (Decoder, succeed, string)
 import Json.Decode.Pipeline exposing (required)
 import Loading
+import ProjectAccess exposing (ProjectAccess)
 import Routes
 import Task exposing (Task)
 import Url.Builder as Builder
@@ -21,7 +22,7 @@ type Status
     | Failed
 
 type alias Model =
-    { flags : Flags
+    { flags : Flags.Model
     , knownContentCode : String
     , learningContentCode : String
     , navigationKey : Navigation.Key
@@ -32,15 +33,7 @@ type alias Model =
 type alias DeleteResult =
     { id : String }
 
-type alias Init =
-    { flags : Flags
-    , kcc : String
-    , key : Navigation.Key
-    , lcc : String
-    , pn : String
-    }
-
-deleteProject : Init -> Task Http.Error DeleteResult
+deleteProject : ProjectAccess -> Task Http.Error DeleteResult
 deleteProject { flags, kcc, lcc, pn } =
     let
         url = Builder.relative [flags.candorUrl, "delete", kcc, lcc, pn] []
@@ -54,7 +47,7 @@ deleteProject { flags, kcc, lcc, pn } =
         , timeout = Nothing
         }
 
-init : Init -> (Model, Cmd Msg)
+init : ProjectAccess -> (Model, Cmd Msg)
 init ( { flags, key, kcc, lcc, pn } as initValues ) =
     (
         { flags = flags
