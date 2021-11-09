@@ -1,5 +1,6 @@
-module Api exposing (handleJsonResponse, Status(..))
+module Api exposing (handleBytesResponse, handleJsonResponse, Status(..))
 
+import Bytes exposing (Bytes)
 import Http
 import Json.Decode exposing (Decoder)
 
@@ -35,4 +36,22 @@ handleJsonResponse decoder response =
 
                 Ok result ->
                     Ok result
+
+handleBytesResponse : (Bytes -> Result String a) -> Http.Response Bytes -> Result Http.Error a
+handleBytesResponse toResult response =
+    case response of
+        Http.BadUrl_ url ->
+            Err (Http.BadUrl url)
+
+        Http.Timeout_ ->
+            Err Http.Timeout
+
+        Http.BadStatus_ { statusCode } _ ->
+            Err (Http.BadStatus statusCode)
+
+        Http.NetworkError_ ->
+            Err Http.NetworkError
+
+        Http.GoodStatus_ _ body ->
+            Result.mapError Http.BadBody (toResult body)
 

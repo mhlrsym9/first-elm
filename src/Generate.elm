@@ -2,13 +2,13 @@ module Generate exposing (init, Model, Msg, update, view)
 
 import Api
 import Browser.Navigation as Navigation
+import Bytes exposing (Bytes)
+import File.Download as Download
 import Flags exposing (Flags)
 import Html exposing (Html, button, div,  text)
 import Html.Attributes exposing (class)
 import Html.Events exposing (onClick)
-import Http exposing (stringResolver)
-import Json.Decode exposing (Decoder, succeed, string)
-import Json.Decode.Pipeline exposing (required)
+import Http exposing (bytesResolver)
 import Loading
 import Routes
 import Task exposing (Task)
@@ -29,9 +29,6 @@ type alias Model =
     , status : Status
     }
 
-type alias GenerationResult =
-    { id : String }
-
 type alias Init =
     { flags : Flags.Model
     , imageRepository : String
@@ -46,36 +43,30 @@ init ( { flags, key, pn } as initValues ) =
     ( { loadingPath = flags.loadingPath, navigationKey = key, pn = pn, status = Generating }
     , Cmd.batch
         [ (postGenerationRequest initValues)
-            |> Task.attempt CompletedGeneration
         , Task.perform (\_ -> PassedSlowGenerationThreshold) Loading.slowThreshold
         ]
     )
 
-generationDecoder : Decoder GenerationResult
-generationDecoder =
-    succeed GenerationResult
-        |> required "id" string
-
-postGenerationRequest : Init -> Task Http.Error GenerationResult
+postGenerationRequest : Init -> Cmd Msg
 postGenerationRequest { flags, imageRepository, kcc, lcc, pn } =
     let
         url = Builder.relative [flags.candorUrl, "generate", imageRepository, kcc, lcc, pn] []
     in
-    Http.task
-        { method = "GET"
-        , headers = []
-        , url = url
-        , body = Http.emptyBody
-        , resolver = stringResolver ( Api.handleJsonResponse generationDecoder )
-        , timeout = Nothing
+    Http.get
+        { url = url
+        , expect = Http.expectBytesResponse CompletedGeneration (Api.handleBytesResponse Ok)
         }
 
 -- UPDATE
 
 type Msg =
     Cancel
-    | CompletedGeneration (Result Http.Error GenerationResult)
+    | CompletedGeneration (Result Http.Error Bytes)
     | PassedSlowGenerationThreshold
+
+downloadGeneratedFile : Bytes -> Cmd Msg
+downloadGeneratedFile response =
+    Download.bytes "x.xml" "application/xml" response
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
@@ -85,8 +76,8 @@ update msg model =
 
         CompletedGeneration r ->
             case r of
-                Ok _ ->
-                    ( { model | status = Generated }, Cmd.none )
+                Ok response ->
+                    ( { model | status = Generated }, downloadGeneratedFile response )
 
                 Err _ ->
                     ( { model | status = Failure }, Cmd.none )
