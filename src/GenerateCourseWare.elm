@@ -9,13 +9,13 @@ type alias Model =
     Generate.Model
 
 init : ProjectAccess -> (Model, Cmd Msg)
-init { flags, key, kcc, lcc, pn } =
+init { flags, key, kl, ll, pn } =
     Generate.init
         { flags = flags
         , imageRepository = "cw"
         , key = key
-        , kcc = kcc
-        , lcc = lcc
+        , kl = kl
+        , ll = ll
         , pn = pn
         }
 

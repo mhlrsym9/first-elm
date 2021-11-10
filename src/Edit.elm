@@ -11,6 +11,7 @@ import Http exposing (jsonBody, stringResolver)
 import Json.Decode exposing (Decoder, succeed, string)
 import Json.Decode.Pipeline exposing (required)
 import Json.Encode as Encode
+import LanguageSelect
 import Loading
 import Routes
 import Task exposing (Task)
@@ -24,8 +25,8 @@ type Modified a =
 
 type alias Model =
     { flags : Flags.Model
-    , knownContentCode : String
-    , learningContentCode : String
+    , knownLanguage : LanguageSelect.Language
+    , learningLanguage : LanguageSelect.Language
     , navigationKey : Navigation.Key
     , project : Modified (Api.Status Project.Model)
     , projectName : String
@@ -36,19 +37,19 @@ type alias SaveResult =
 
 type alias Init =
     { flags : Flags.Model
-    , kcc : String
+    , kl : LanguageSelect.Language
     , key : Navigation.Key
-    , lcc : String
+    , ll : LanguageSelect.Language
     , pn : String
     , model : Api.Status Project.Model
     }
 
 init : Init -> (Model, Cmd Msg)
-init { key, kcc, lcc, pn, model, flags } =
+init { key, kl, ll, pn, model, flags } =
     (
         { flags = flags
-        , knownContentCode = kcc
-        , learningContentCode = lcc
+        , knownLanguage = kl
+        , learningLanguage = ll
         , navigationKey = key
         , project = Clean model
         , projectName = pn
@@ -88,11 +89,11 @@ saveProjectDecoder =
     succeed SaveResult
         |> required "id" string
 
-encodeProject : String -> String -> String -> Project.Model -> Encode.Value
-encodeProject knownContentCode learningContentCode projectName project =
+encodeProject : LanguageSelect.Language -> LanguageSelect.Language -> String -> Project.Model -> Encode.Value
+encodeProject kl ll projectName project =
     Encode.object
-        [ ( "l1", Encode.string knownContentCode )
-        , ( "l2", Encode.string learningContentCode )
+        [ ( "l1", Encode.string ( LanguageSelect.contentCodeFromLanguage kl ) )
+        , ( "l2", Encode.string ( LanguageSelect.contentCodeFromLanguage ll ) )
         , ( "project", Encode.string projectName )
         , ( "slides", Project.encodeProject project )
         ]
@@ -151,7 +152,7 @@ storeSlideContents slideContents ( { project } as model ) =
             model
 
 update : Msg -> Model -> (Model, Cmd Msg)
-update msg ( { knownContentCode, learningContentCode, projectName, project, flags } as model ) =
+update msg ( { knownLanguage, learningLanguage, projectName, project, flags } as model ) =
     case msg of
         Cancel ->
             ( model, Navigation.pushUrl model.navigationKey (Routes.routeToUrl Routes.Home) )
@@ -216,7 +217,7 @@ update msg ( { knownContentCode, learningContentCode, projectName, project, flag
                 Dirty (Api.Loaded projectModel) ->
                     ( { model | project = Dirty (Api.Updating projectModel) }
                     , Cmd.batch
-                        [ encodeProject knownContentCode learningContentCode projectName projectModel
+                        [ encodeProject knownLanguage learningLanguage projectName projectModel
                             |> saveProject flags.candorUrl
                             |> Task.attempt CompletedProjectSave
                         , Task.perform (\_ -> PassedSlowSaveThreshold) Loading.slowThreshold
@@ -230,7 +231,7 @@ update msg ( { knownContentCode, learningContentCode, projectName, project, flag
             ( model, Cmd.none )
 
 viewEditPageInfo : Model -> Html Msg
-viewEditPageInfo { knownContentCode, learningContentCode, projectName } =
+viewEditPageInfo { knownLanguage, learningLanguage, projectName } =
     div
         [ class "edit-page-info"]
         [
@@ -239,11 +240,11 @@ viewEditPageInfo { knownContentCode, learningContentCode, projectName } =
                 [
                     div
                         [ ]
-                        [ text ( "Known Language Code: " ++ knownContentCode ) ]
+                        [ text ( "Known Language: " ++ knownLanguage.displayName ) ]
                     ,
                     div
                         [ ]
-                        [ text ( "Learning Language Code: " ++ learningContentCode ) ]
+                        [ text ( "Learning Language: " ++ learningLanguage.displayName ) ]
                 ]
             ,
             h1

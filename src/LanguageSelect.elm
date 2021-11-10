@@ -1,4 +1,4 @@
-module LanguageSelect exposing (alwaysSetAvailableLanguages, ContentCode, fetchLanguages, getChosenLanguage, getContentCode, init, Languages, Model, Msg(..), setAvailableLanguages, toContentCode, update, view)
+module LanguageSelect exposing (alwaysSetAvailableLanguages, ContentCode, contentCodeFromLanguage, fetchLanguages, fromContentCode, getChosenLanguage, getContentCode, init, Language, languageFromContentCode, Languages, Model, Msg(..), setAvailableLanguages, toContentCode, update, view)
 
 import Api
 import Dict exposing (Dict)
@@ -81,9 +81,9 @@ initialData languages =
     , dictLanguages = Dict.fromList (List.map createDictTuple paddedLanguages)
     }
 
-init : List Language -> (Model, Cmd Msg)
+init : Languages -> Model
 init languages =
-    ( initialData languages, Cmd.none )
+    initialData languages
 
 getChosenLanguage : Model -> String
 getChosenLanguage { chosenLanguage }  =
@@ -112,6 +112,21 @@ fromContentCode cc =
     case cc of
         ContentCode s ->
             s
+
+contentCodeFromLanguage : Language -> String
+contentCodeFromLanguage language =
+    fromContentCode language.contentCode
+
+languageFromContentCode : Model -> String -> Language
+languageFromContentCode model cc =
+    let
+        l = Dict.get cc model.dictLanguages
+    in
+    case l of
+        Just language ->
+            language
+        Nothing ->
+            { displayName = "", contentCode = toContentCode cc }
 
 findLanguageFromContentCode : Dict String Language -> String -> Language
 findLanguageFromContentCode dict cc =
@@ -142,8 +157,6 @@ fetchLanguages =
         , resolver = stringResolver (Api.handleJsonResponse languagesDecoder)
         , timeout = Nothing
         }
-
-
 
 -- UPDATE
 

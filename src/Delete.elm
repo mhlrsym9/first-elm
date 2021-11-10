@@ -9,6 +9,7 @@ import Html.Events exposing (onClick)
 import Http exposing (stringResolver)
 import Json.Decode exposing (Decoder, succeed, string)
 import Json.Decode.Pipeline exposing (required)
+import LanguageSelect
 import Loading
 import ProjectAccess exposing (ProjectAccess)
 import Routes
@@ -23,8 +24,8 @@ type Status
 
 type alias Model =
     { flags : Flags.Model
-    , knownContentCode : String
-    , learningContentCode : String
+    , kl : LanguageSelect.Language
+    , ll : LanguageSelect.Language
     , navigationKey : Navigation.Key
     , projectName : String
     , status : Status
@@ -34,8 +35,10 @@ type alias DeleteResult =
     { id : String }
 
 deleteProject : ProjectAccess -> Task Http.Error DeleteResult
-deleteProject { flags, kcc, lcc, pn } =
+deleteProject { flags, kl, ll, pn } =
     let
+        kcc = LanguageSelect.contentCodeFromLanguage kl
+        lcc = LanguageSelect.contentCodeFromLanguage ll
         url = Builder.relative [flags.candorUrl, "delete", kcc, lcc, pn] []
     in
     Http.task
@@ -48,11 +51,11 @@ deleteProject { flags, kcc, lcc, pn } =
         }
 
 init : ProjectAccess -> (Model, Cmd Msg)
-init ( { flags, key, kcc, lcc, pn } as initValues ) =
+init ( { flags, key, kl, ll, pn } as initValues ) =
     (
         { flags = flags
-        , knownContentCode = kcc
-        , learningContentCode = lcc
+        , kl = kl
+        , ll = ll
         , navigationKey = key
         , projectName = pn
         , status = Deleting

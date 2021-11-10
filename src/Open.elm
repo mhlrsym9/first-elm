@@ -2,7 +2,6 @@ module Open exposing (Model, Msg, init, update, view)
 
 import Api
 import Browser.Navigation as Navigation
-import File.Download as Download
 import Flags exposing (Flags)
 import Html exposing (Html, button, div, h3, table, text, tr)
 import Html.Attributes exposing (class)
@@ -75,17 +74,12 @@ initialData navigationKey knownLanguageModel learningLanguageModel loadingPath =
 init : Navigation.Key -> Flags.Model -> LanguageSelect.Languages -> (Model, Cmd Msg)
 init key { loadingPath, candorUrl } languages =
     let
-        ( knownLanguageModel, knownLanguageCmd ) =
-            LanguageSelect.init languages
-
-        ( learningLanguageModel, learningLanguageCmd ) =
-            LanguageSelect.init languages
+        knownLanguageModel = LanguageSelect.init languages
+        learningLanguageModel = LanguageSelect.init languages
     in
     ( Success (initialData key knownLanguageModel learningLanguageModel loadingPath)
     , Cmd.batch
-        [ Cmd.map KnownLanguageMsg knownLanguageCmd
-        , Cmd.map LearningLanguageMsg learningLanguageCmd
-        , fetchProjects candorUrl
+        [ fetchProjects candorUrl
             |> Task.attempt CompletedProjectDescriptorsLoad
         , Task.perform (\_ -> PassedSlowLoadThreshold) Loading.slowThreshold
         ]

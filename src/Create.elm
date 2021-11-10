@@ -24,21 +24,13 @@ initialData navigationKey =
     , navigationKey = navigationKey
     }
 
-init : Navigation.Key -> LanguageSelect.Languages -> (Model, Cmd Msg)
+init : Navigation.Key -> LanguageSelect.Languages -> Model
 init key languages =
     let
-        ( knownLanguageModel, knownLanguageCmd ) =
-            LanguageSelect.init languages
-
-        ( learningLanguageModel, learningLanguageCmd ) =
-            LanguageSelect.init languages
+        knownLanguageModel = LanguageSelect.init languages
+        learningLanguageModel = LanguageSelect.init languages
     in
-    ( Success (initialData key) knownLanguageModel learningLanguageModel
-    , Cmd.batch
-        [ Cmd.map KnownLanguageMsg knownLanguageCmd
-        , Cmd.map LearningLanguageMsg learningLanguageCmd
-        ]
-    )
+    Success (initialData key) knownLanguageModel learningLanguageModel
 
 -- UPDATE
 
@@ -111,8 +103,8 @@ view model =
         Success { projectName } knownLanguage learningLanguage ->
             div
                 [ class "create-page" ]
-                [ ViewHelpers.viewLanguageSelect "L1" KnownLanguageMsg knownLanguage
-                , ViewHelpers.viewLanguageSelect "L2" LearningLanguageMsg learningLanguage
+                [ ViewHelpers.viewLanguageSelect "Known Language: " KnownLanguageMsg knownLanguage
+                , ViewHelpers.viewLanguageSelect "Learning Language: " LearningLanguageMsg learningLanguage
                 , div
                     [ class "text-input" ]
                     [ label

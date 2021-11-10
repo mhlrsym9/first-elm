@@ -5,6 +5,7 @@ import Data.Project as Project
 import Edit
 import Html exposing (Html)
 import Http exposing (stringResolver)
+import LanguageSelect
 import Loading
 import ProjectAccess exposing (ProjectAccess)
 import Task exposing (Task)
@@ -16,14 +17,14 @@ type alias Model =
     Edit.Model
 
 init : ProjectAccess -> (Model, Cmd Msg)
-init ( { flags, kcc, key, lcc, pn } as initValues ) =
+init ( { flags, kl, key, ll, pn } as initValues ) =
     let
         ( editModel, editMsg ) =
             Edit.init
                 { flags = flags
-                , kcc = kcc
+                , kl = kl
                 , key = key
-                , lcc = lcc
+                , ll = ll
                 , pn = pn
                 , model = Api.Loading
                 }
@@ -38,8 +39,10 @@ init ( { flags, kcc, key, lcc, pn } as initValues ) =
     )
 
 fetchProject : ProjectAccess -> Task Http.Error Project.Model
-fetchProject { flags, kcc, lcc, pn } =
+fetchProject { flags, kl, ll, pn } =
     let
+        kcc = LanguageSelect.contentCodeFromLanguage kl
+        lcc = LanguageSelect.contentCodeFromLanguage ll
         url = Builder.relative [flags.candorUrl, "read", kcc, lcc, pn] []
     in
     Http.task

@@ -23,14 +23,14 @@ type alias CreateResult =
     { id : String }
 
 init : ProjectAccess -> (Model, Cmd Msg)
-init { flags, key, kcc, lcc, pn } =
+init { flags, key, kl, ll, pn } =
     let
         projectModel = Project.initNewProject flags.setupEditorName
         (editModel, editCommands) = Edit.init
             { flags = flags
             , key = key
-            , kcc = kcc
-            , lcc = lcc
+            , kl = kl
+            , ll = ll
             , model = Api.Creating projectModel
             , pn = pn
             }
@@ -38,7 +38,7 @@ init { flags, key, kcc, lcc, pn } =
     ( editModel
     , Cmd.batch
         [ Cmd.map EditMsg editCommands
-        , Edit.encodeProject kcc lcc pn projectModel
+        , Edit.encodeProject kl ll pn projectModel
             |> createProject flags.candorUrl
             |> Task.attempt CompletedProjectCreate
         , Task.perform (\_ -> PassedSlowCreateThreshold) Loading.slowThreshold

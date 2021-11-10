@@ -14,7 +14,9 @@ import GenerateAlphabet
 import GenerateCourseWare
 import Html exposing (Html, div, h1, text)
 import Html.Attributes exposing (class)
-import Http exposing (Response)
+import Http exposing (Response, stringResolver)
+import Json.Decode exposing (Decoder, string)
+import Json.Decode.Pipeline exposing (required)
 import LanguageSelect
 import Loading
 import Open
@@ -25,6 +27,7 @@ import Routes
 import Start
 import Task exposing (Task)
 import Url exposing (Url)
+import Url.Builder as Builder
 
 ---- PORTS ----
 
@@ -63,22 +66,69 @@ type Page
     | NotFound
     | Start Start.Model
 
+type DataError
+    = NoLanguages
+
+type Error
+    = HttpError Http.Error
+    | DataError DataError
+
+type alias Version =
+    { version : String }
+
 type alias Model =
-    { page : Page
+    { flags : Flags.Model
     , languages : Api.Status LanguageSelect.Languages
     , navigationKey : Navigation.Key
+    , page : Page
     , procModel : (Procedure.Program.Model Msg)
-    , flags : Flags.Model
+    , serverVersion : Version
     }
 
 initialModel : Navigation.Key -> Flags -> Model
 initialModel navigationKey flags =
-    { page = NotFound
+    { flags = Flags.init flags
     , languages = Api.Loading
     , navigationKey = navigationKey
+    , page = NotFound
     , procModel = Procedure.Program.init
-    , flags = Flags.init flags
+    , serverVersion = { version = "" }
     }
+
+versionDecoder : Decoder Version
+versionDecoder =
+    Json.Decode.succeed Version
+        |> required "version" string
+
+fetchVersion : Flags -> Task Http.Error Version
+fetchVersion flags =
+    let
+        url = Builder.relative [flags.candorUrl, "version"] []
+    in
+    Http.task
+        { method = "GET"
+        , headers = []
+        , url = url
+        , body = Http.emptyBody
+        , resolver = stringResolver (Api.handleJsonResponse versionDecoder)
+        , timeout = Nothing
+        }
+
+fetchPreliminaryInfo : Flags -> Task Error ( LanguageSelect.Languages, Version )
+fetchPreliminaryInfo flags =
+    LanguageSelect.fetchLanguages
+        |> Task.mapError HttpError
+        |> Task.andThen
+            (\languages ->
+                case languages of
+                    [] ->
+                        Task.fail (DataError NoLanguages)
+
+                    _ ->
+                        fetchVersion flags
+                            |> Task.mapError HttpError
+                            |> Task.map (\v -> (languages, v))
+            )
 
 init : Flags -> Url -> Navigation.Key -> ( Model, Cmd Msg )
 init flags url navigationKey =
@@ -90,8 +140,7 @@ init flags url navigationKey =
     ( model
     , Cmd.batch
         [ cmd
-        , LanguageSelect.fetchLanguages
-            |> Task.attempt CompletedLanguageLoad
+        , Task.attempt CompletedPreliminaryLoad (fetchPreliminaryInfo flags)
         , Task.perform (\_ -> PassedSlowLoadThreshold) Loading.slowThreshold
         ]
     )
@@ -99,7 +148,7 @@ init flags url navigationKey =
 ---- UPDATE ----
 
 type Msg
-    = CompletedLanguageLoad (Result Http.Error LanguageSelect.Languages)
+    = CompletedPreliminaryLoad (Result Error ( LanguageSelect.Languages, Version ) )
     | ConsoleOut String
     | CreateMsg Create.Msg
     | DeleteMsg Delete.Msg
@@ -117,21 +166,26 @@ type Msg
     | Visit UrlRequest
 
 setNewPage : Maybe Routes.Route -> Model -> ( Model, Cmd Msg )
-setNewPage maybeRoute ( { navigationKey, flags } as model ) =
+setNewPage maybeRoute ( { navigationKey, flags, languages } as model ) =
+    let
+        theLanguages =
+            case languages of
+                Api.Loaded ls ->
+                    ls
+
+                _ ->
+                    []
+
+        languagesModel = LanguageSelect.init theLanguages
+    in
     case maybeRoute of
         Just Routes.Create ->
             let
-                ( createModel, createCmd ) =
-                    Create.init
-                        navigationKey <|
-                        case model.languages of
-                            Api.Loaded languages ->
-                                languages
-                            _ ->
-                                []
+                createModel = Create.init navigationKey theLanguages
             in
             ( { model | page = Create createModel }
-            , Cmd.map CreateMsg createCmd )
+            , Cmd.none
+            )
 
         Just (Routes.Delete k l p) ->
             case p of
@@ -140,9 +194,9 @@ setNewPage maybeRoute ( { navigationKey, flags } as model ) =
                         ( deleteModel, deleteCommand ) =
                             Delete.init
                                 { flags = flags
-                                , kcc = k
+                                , kl = LanguageSelect.languageFromContentCode languagesModel k
                                 , key = navigationKey
-                                , lcc = l
+                                , ll = LanguageSelect.languageFromContentCode languagesModel l
                                 , pn =  projectName
                                 }
                     in
@@ -159,9 +213,9 @@ setNewPage maybeRoute ( { navigationKey, flags } as model ) =
                         ( editModel, editCmd ) =
                             EditNew.init
                                 { flags = flags
-                                , kcc = k
+                                , kl = LanguageSelect.languageFromContentCode languagesModel k
                                 , key = navigationKey
-                                , lcc = l
+                                , ll = LanguageSelect.languageFromContentCode languagesModel l
                                 , pn =  projectName
                                 }
                     in
@@ -179,8 +233,8 @@ setNewPage maybeRoute ( { navigationKey, flags } as model ) =
                             EditExisting.init
                                 { flags = flags
                                 , key = navigationKey
-                                , kcc = k
-                                , lcc = l
+                                , kl = LanguageSelect.languageFromContentCode languagesModel k
+                                , ll = LanguageSelect.languageFromContentCode languagesModel l
                                 , pn = projectName
                                 }
                     in
@@ -198,8 +252,8 @@ setNewPage maybeRoute ( { navigationKey, flags } as model ) =
                             GenerateAlphabet.init
                                 { flags = flags
                                 , key = navigationKey
-                                , kcc = k
-                                , lcc = l
+                                , kl = LanguageSelect.languageFromContentCode languagesModel k
+                                , ll = LanguageSelect.languageFromContentCode languagesModel l
                                 , pn = projectName
                                 }
                     in
@@ -217,8 +271,8 @@ setNewPage maybeRoute ( { navigationKey, flags } as model ) =
                             GenerateCourseWare.init
                                 { flags = flags
                                 , key = navigationKey
-                                , kcc = k
-                                , lcc = l
+                                , kl = LanguageSelect.languageFromContentCode languagesModel k
+                                , ll = LanguageSelect.languageFromContentCode languagesModel l
                                 , pn = projectName
                                 }
                     in
@@ -239,13 +293,7 @@ setNewPage maybeRoute ( { navigationKey, flags } as model ) =
         Just Routes.Open ->
             let
                 ( openModel, openCmd ) =
-                    Open.init
-                        navigationKey flags <|
-                        case model.languages of
-                            Api.Loaded languages ->
-                                languages
-                            _ ->
-                                []
+                    Open.init navigationKey flags theLanguages
             in
             ( { model | page = Open openModel }
             , Cmd.map OpenMsg openCmd )
@@ -266,10 +314,10 @@ updateEdit editMsg editModel model =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case ( msg, model.page ) of
-        ( CompletedLanguageLoad result, _ ) ->
+        ( CompletedPreliminaryLoad result, _ ) ->
             case result of
-                Ok languages ->
-                    ( { model | languages = Api.Loaded languages }, Cmd.none )
+                Ok (languages, version) ->
+                    ( { model | languages = Api.Loaded languages, serverVersion = version }, Cmd.none )
 
                 Err _ ->
                     ( { model | languages = Api.Failed }, Cmd.none )
@@ -435,14 +483,14 @@ viewStandardHeader : String -> Html Msg
 viewStandardHeader header =
     h1 [] [ text header ]
 
-viewVersion : Flags.Model -> Html Msg
-viewVersion flags =
+viewVersion : Model -> Html Msg
+viewVersion { flags, serverVersion } =
     div
         [ ]
-        [ text ( Flags.versionString flags ) ]
+        [ text ( serverVersion.version ++ " Elm Client " ++ Flags.versionString flags ) ]
 
-viewHeader : Flags.Model -> Page -> Html Msg
-viewHeader flags page =
+viewHeader : Model -> Html Msg
+viewHeader ( { page } as model ) =
     div
         [ ]
         [
@@ -478,11 +526,11 @@ viewHeader flags page =
                 Start startModel ->
                     Start.view startModel
                         |> Html.map StartMsg
-            , viewVersion flags
+            , viewVersion model
         ]
 
 viewContent : Model -> ( String, Html Msg )
-viewContent { flags, page, languages } =
+viewContent ( { flags, languages } as model ) =
     let
         contents =
             case languages of
@@ -496,7 +544,7 @@ viewContent { flags, page, languages } =
                     div [] [ Loading.error "languages" ]
 
                 Api.Loaded _ ->
-                    viewHeader flags page
+                    viewHeader model
 
                 _ ->
                     div [] []

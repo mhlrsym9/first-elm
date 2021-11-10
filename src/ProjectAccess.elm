@@ -2,12 +2,13 @@ module ProjectAccess exposing (ProjectAccess)
 
 import Flags
 import Browser.Navigation as Navigation
+import LanguageSelect
 
 type alias ProjectAccess =
     { flags : Flags.Model
-    , kcc : String
+    , kl : LanguageSelect.Language
     , key : Navigation.Key
-    , lcc : String
+    , ll : LanguageSelect.Language
     , pn : String
     }
 
