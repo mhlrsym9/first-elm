@@ -43,18 +43,23 @@ init ( { flags, key, pn } as initValues ) =
     ( { loadingPath = flags.loadingPath, navigationKey = key, pn = pn, status = Generating }
     , Cmd.batch
         [ (postGenerationRequest initValues)
+            |> Task.attempt CompletedGeneration
         , Task.perform (\_ -> PassedSlowGenerationThreshold) Loading.slowThreshold
         ]
     )
 
-postGenerationRequest : Init -> Cmd Msg
+postGenerationRequest : Init -> Task Http.Error Bytes
 postGenerationRequest { flags, imageRepository, kcc, lcc, pn } =
     let
         url = Builder.relative [flags.candorUrl, "generate", imageRepository, kcc, lcc, pn] []
     in
-    Http.get
-        { url = url
-        , expect = Http.expectBytesResponse CompletedGeneration (Api.handleBytesResponse Ok)
+    Http.task
+        { method = "GET"
+        , headers = []
+        , url = url
+        , body = Http.emptyBody
+        , resolver = bytesResolver ( Api.handleBytesResponse Ok )
+        , timeout = Nothing
         }
 
 -- UPDATE
@@ -64,9 +69,9 @@ type Msg =
     | CompletedGeneration (Result Http.Error Bytes)
     | PassedSlowGenerationThreshold
 
-downloadGeneratedFile : Bytes -> Cmd Msg
-downloadGeneratedFile response =
-    Download.bytes "x.xml" "application/xml" response
+downloadGeneratedFile : Model -> Bytes -> Cmd msg
+downloadGeneratedFile { pn } response =
+    Download.bytes (pn ++ ".xml") "application/xml" response
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
@@ -77,7 +82,7 @@ update msg model =
         CompletedGeneration r ->
             case r of
                 Ok response ->
-                    ( { model | status = Generated }, downloadGeneratedFile response )
+                    ( { model | status = Generated }, downloadGeneratedFile model response )
 
                 Err _ ->
                     ( { model | status = Failure }, Cmd.none )
@@ -92,12 +97,6 @@ update msg model =
 
 -- VIEW
 
-viewMessage : String -> Html Msg
-viewMessage pn =
-    div
-        [ ]
-        [ text (pn ++ " failed to generate!") ]
-
 viewActionButtons : Html Msg
 viewActionButtons =
     div
@@ -108,33 +107,51 @@ viewActionButtons =
                 [ text "Return to Home Screen" ]
         ]
 
+viewFailureMessage : String -> Html Msg
+viewFailureMessage pn =
+    div
+        [ ]
+        [ text (pn ++ " failed to generate!") ]
+
 viewFailure : String -> Html Msg
 viewFailure pn =
     div
         [ ]
-        [ viewMessage pn
+        [ viewFailureMessage pn
         , viewActionButtons
         ]
+
+viewGeneratedMessage : String -> Html Msg
+viewGeneratedMessage pn =
+    div
+        [ ]
+        [ text (pn ++ " is ready to be downloaded. Follow the browser's instructions.") ]
 
 viewGenerated : String -> Html Msg
 viewGenerated pn =
     div
         [ ]
-        [ viewMessage pn
+        [ viewGeneratedMessage pn
         , viewActionButtons
         ]
+
+viewGeneratingMessage : String -> Html Msg
+viewGeneratingMessage pn =
+    div
+        [ ]
+        [ text (pn ++ " is being generated. Please wait...") ]
 
 viewGenerating : String -> Html Msg
 viewGenerating pn =
     div
         [ ]
-        [ viewMessage pn ]
+        [ viewGeneratingMessage pn ]
 
 viewGeneratingSlowly : String -> String -> Html Msg
 viewGeneratingSlowly pn loadingPath =
     div
         [ ]
-        [ viewMessage pn
+        [ viewGeneratingMessage pn
         , div
             [ ]
             [ Loading.icon loadingPath ]
