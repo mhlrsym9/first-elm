@@ -9,7 +9,7 @@ import Html.Events exposing (onClick)
 import Http exposing (stringResolver)
 import Json.Decode exposing (Decoder, succeed, string)
 import Json.Decode.Pipeline exposing (required)
-import LanguageSelect
+import LanguageHelpers
 import Loading
 import ProjectAccess exposing (ProjectAccess)
 import Routes
@@ -24,8 +24,8 @@ type Status
 
 type alias Model =
     { flags : Flags.Model
-    , kl : LanguageSelect.Language
-    , ll : LanguageSelect.Language
+    , kl : LanguageHelpers.Language
+    , ll : LanguageHelpers.Language
     , navigationKey : Navigation.Key
     , projectName : String
     , status : Status
@@ -37,8 +37,8 @@ type alias DeleteResult =
 deleteProject : ProjectAccess -> Task Http.Error DeleteResult
 deleteProject { flags, kl, ll, pn } =
     let
-        kcc = LanguageSelect.contentCodeFromLanguage kl
-        lcc = LanguageSelect.contentCodeFromLanguage ll
+        kcc = LanguageHelpers.contentCodeStringFromLanguage kl
+        lcc = LanguageHelpers.contentCodeStringFromLanguage ll
         url = Builder.relative [flags.candorUrl, "delete", kcc, lcc, pn] []
     in
     Http.task

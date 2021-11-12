@@ -10,6 +10,7 @@ import Http exposing (stringResolver)
 import Json.Decode exposing (Decoder, decodeString, list, string, succeed)
 import Json.Decode.Pipeline exposing (required)
 import Json.Encode as Encode
+import LanguageHelpers
 import LanguageSelect
 import List.Extra
 import Loading
@@ -67,11 +68,11 @@ initialData navigationKey knownLanguageModel learningLanguageModel loadingPath =
     , knownLanguageModel = knownLanguageModel
     , learningLanguageModel = learningLanguageModel
     , loadingPath = loadingPath
-    , projectDescriptions = Api.Loading
+    , projectDescriptions = Api.Loading []
     , navigationKey = navigationKey
     }
 
-init : Navigation.Key -> Flags.Model -> LanguageSelect.Languages -> (Model, Cmd Msg)
+init : Navigation.Key -> Flags.Model -> LanguageHelpers.Model -> (Model, Cmd Msg)
 init key { loadingPath, candorUrl } languages =
     let
         knownLanguageModel = LanguageSelect.init languages
@@ -146,8 +147,8 @@ updateKnownLanguagesFilter learningLanguageMsg data =
     let
         ( updatedModel, updatedCmd ) =
             LanguageSelect.update learningLanguageMsg data.learningLanguageModel
-        kcc = LanguageSelect.getContentCode data.knownLanguageModel
-        lcc = LanguageSelect.getContentCode updatedModel
+        kcc = LanguageSelect.getChosenContentCodeString data.knownLanguageModel
+        lcc = LanguageSelect.getChosenContentCodeString updatedModel
         updatedProjectDescriptions = matchedProjectDescriptions data.projectDescriptions matchingProjectDescription kcc lcc
         uniqueKnownContentCodes = extractContentCodes updatedProjectDescriptions (\{ l1 } -> l1)
     in
@@ -176,8 +177,8 @@ updateLearningLanguagesFilter knownLanguageMsg data =
     let
         ( updatedModel, updatedCmd ) =
             LanguageSelect.update knownLanguageMsg data.knownLanguageModel
-        kcc = LanguageSelect.getContentCode updatedModel
-        lcc = LanguageSelect.getContentCode data.learningLanguageModel
+        kcc = LanguageSelect.getChosenContentCodeString updatedModel
+        lcc = LanguageSelect.getChosenContentCodeString data.learningLanguageModel
         updatedProjectDescriptions = matchedProjectDescriptions data.projectDescriptions matchingProjectDescription kcc lcc
         uniqueLearningContentCodes = extractContentCodes updatedProjectDescriptions (\{ l2 } -> l2)
     in
@@ -236,8 +237,8 @@ update msg model =
                         , displayedProjectDescriptions = projectDescriptions
                         }
                     , Cmd.batch
-                        [ Cmd.map KnownLanguageMsg (LanguageSelect.alwaysSetAvailableLanguages uniqueKnownContentCodes data.knownLanguageModel)
-                        , Cmd.map LearningLanguageMsg (LanguageSelect.alwaysSetAvailableLanguages uniqueLearningContentCodes data.learningLanguageModel)
+                        [ Cmd.map KnownLanguageMsg (LanguageSelect.setAvailableLanguages uniqueKnownContentCodes data.knownLanguageModel)
+                        , Cmd.map LearningLanguageMsg (LanguageSelect.setAvailableLanguages uniqueLearningContentCodes data.learningLanguageModel)
                         ]
                     )
 
@@ -293,8 +294,8 @@ update msg model =
                 -- so `view` knows to render a spinner.
                 updatedProjectDescriptions =
                     case data.projectDescriptions of
-                        Api.Loading ->
-                            Api.LoadingSlowly
+                        Api.Loading p ->
+                            Api.LoadingSlowly p
 
                         other ->
                             other
@@ -347,12 +348,6 @@ view model =
     case model of
         Success { knownLanguageModel, learningLanguageModel, loadingPath, chosenProject, projectDescriptions, displayedProjectDescriptions } ->
             case projectDescriptions of
-                Api.Loading ->
-                    div [] []
-
-                Api.LoadingSlowly ->
-                    Loading.icon loadingPath
-
                 Api.Failed ->
                     div [] [ Loading.error "project descriptions" ]
 
@@ -374,5 +369,8 @@ view model =
                             ]
                         ]
 
-                _ ->
-                    div [ ] [ ]
+                Api.Loading _ ->
+                    div [] []
+
+                Api.LoadingSlowly _ ->
+                    div [] [ Loading.icon loadingPath ]

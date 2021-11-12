@@ -1,162 +1,64 @@
-module LanguageSelect exposing (alwaysSetAvailableLanguages, ContentCode, contentCodeFromLanguage, fetchLanguages, fromContentCode, getChosenLanguage, getContentCode, init, Language, languageFromContentCode, Languages, Model, Msg(..), setAvailableLanguages, toContentCode, update, view)
+module LanguageSelect exposing (getChosenDisplayLanguage, getChosenContentCodeString, init, Model, Msg(..), setAvailableLanguages, update, view)
 
-import Api
-import Dict exposing (Dict)
 import Html exposing (Html, option, select, text)
 import Html.Attributes exposing (attribute, value)
 import Html.Events.Extra exposing (onChange)
-import Http exposing (stringResolver)
-import Json.Decode exposing (Decoder, field, list, map, string)
-import Json.Decode.Pipeline exposing (custom, required)
+import LanguageHelpers exposing (ContentCode, Language, Languages)
 import Task exposing (Task)
 
 -- MODEL
 
-type ContentCode =
-    ContentCode String
-
-type alias Language =
-    { displayName : String
-    , contentCode : ContentCode
-    }
-
-type alias Languages =
-    List Language
-
 type alias Model =
     { chosenLanguage : Maybe Language
-    , languages : Languages
     , displayedLanguages : Languages
-    , dictLanguages : Dict String Language
+    , languageModel : LanguageHelpers.Model
     }
 
-languageDecoder : Decoder Language
-languageDecoder =
-    Json.Decode.succeed Language
-        |> required "display" string
-        |> custom contentCodeDecoder
+-- INIT
 
-contentCodeDecoder : Decoder ContentCode
-contentCodeDecoder =
-    map ContentCode (field "content_code" string)
-
-languagesDecoder : Decoder Languages
-languagesDecoder =
-    (list languageDecoder)
-
-createDictTuple : Language -> ( String, Language )
-createDictTuple ({ contentCode } as language) =
+initialData : LanguageHelpers.Model -> Model
+initialData ( { languages } as model ) =
     let
-        s = case contentCode of
-            ContentCode str ->
-                str
-    in
-    ( s, language )
-
-emptyLanguage : Language
-emptyLanguage =
-    { displayName = "", contentCode = ( ContentCode "" ) }
-
-initialData : Languages -> Model
-initialData languages =
-    let
-        paddedLanguages =
-            case languages of
-                _ :: _ ->
-                    (emptyLanguage)
-                    :: languages
-                [] ->
-                    languages
-
         chosenLanguage =
-            case paddedLanguages of
+            case languages of
                 f::_ ->
                     Just f
                 [] ->
                     Nothing
     in
     { chosenLanguage = chosenLanguage
-    , languages = paddedLanguages
-    , displayedLanguages = paddedLanguages
-    , dictLanguages = Dict.fromList (List.map createDictTuple paddedLanguages)
+    , displayedLanguages = languages
+    , languageModel = model
     }
 
-init : Languages -> Model
-init languages =
-    initialData languages
+init : LanguageHelpers.Model -> Model
+init languageModel =
+    initialData languageModel
 
-getChosenLanguage : Model -> String
-getChosenLanguage { chosenLanguage }  =
+getChosenDisplayLanguage : Model -> String
+getChosenDisplayLanguage { chosenLanguage }  =
     case chosenLanguage of
         Just { displayName } ->
             displayName
         Nothing ->
             ""
 
-getContentCode : Model -> String
-getContentCode { chosenLanguage } =
+getChosenContentCodeString : Model -> String
+getChosenContentCodeString { chosenLanguage } =
     case chosenLanguage of
-        Just { contentCode } ->
-            case contentCode of
-                ContentCode contentCodeStr ->
-                    contentCodeStr
+        Just language ->
+            LanguageHelpers.contentCodeStringFromLanguage language
+
         Nothing ->
             ""
 
-toContentCode : String -> ContentCode
-toContentCode s =
-    ContentCode s
-
-fromContentCode : ContentCode -> String
-fromContentCode cc =
-    case cc of
-        ContentCode s ->
-            s
-
-contentCodeFromLanguage : Language -> String
-contentCodeFromLanguage language =
-    fromContentCode language.contentCode
-
-languageFromContentCode : Model -> String -> Language
-languageFromContentCode model cc =
-    let
-        l = Dict.get cc model.dictLanguages
-    in
-    case l of
-        Just language ->
-            language
-        Nothing ->
-            { displayName = "", contentCode = toContentCode cc }
-
-findLanguageFromContentCode : Dict String Language -> String -> Language
-findLanguageFromContentCode dict cc =
-    let
-        ml = Dict.get cc dict
-    in
-    case ml of
-        Just l ->
-            l
-        Nothing ->
-            (emptyLanguage)
-
 setAvailableLanguages : List String -> Model -> Cmd Msg
-setAvailableLanguages ccs { dictLanguages } =
-    Task.perform UpdateLanguages (Task.succeed ((emptyLanguage) :: (List.map (findLanguageFromContentCode dictLanguages) ccs)))
-
-alwaysSetAvailableLanguages : List String -> Model -> Cmd Msg
-alwaysSetAvailableLanguages ccs { dictLanguages } =
-    Task.perform UpdateLanguages (Task.succeed ((emptyLanguage) :: (List.map (findLanguageFromContentCode dictLanguages) ccs)))
-
-fetchLanguages : Task Http.Error (List Language)
-fetchLanguages =
-    Http.task
-        { method = "GET"
-        , headers = []
-        , url = "https://lds.transparent.com/languages/all/simtir?json=true"
-        , body = Http.emptyBody
-        , resolver = stringResolver (Api.handleJsonResponse languagesDecoder)
-        , timeout = Nothing
-        }
+setAvailableLanguages ccs { languageModel } =
+    Task.perform UpdateLanguages
+        (Task.succeed
+            (LanguageHelpers.emptyLanguage :: List.sortBy
+                (\l -> LanguageHelpers.displayNameFromLanguage l)
+                (LanguageHelpers.contentCodesToLanguages languageModel ccs)))
 
 -- UPDATE
 
@@ -167,9 +69,9 @@ type Msg
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
     case ( msg, model ) of
-        ( UpdateLanguage language, { chosenLanguage, dictLanguages } ) ->
+        ( UpdateLanguage language, { chosenLanguage, languageModel } ) ->
             let
-                dictLanguage = Dict.get language dictLanguages
+                dictLanguage = LanguageHelpers.findLanguageFromContentCode languageModel language
             in
             case dictLanguage of
                 Just _ ->
@@ -186,14 +88,16 @@ update msg model =
             )
 
 viewOption : Language -> Html Msg
-viewOption { displayName, contentCode } =
-    case contentCode of
-        ContentCode s ->
-            option
-                [ (attribute "key" s)
-                , value s
-                ]
-                [ text displayName ]
+viewOption language =
+    let
+        cc = LanguageHelpers.contentCodeStringFromLanguage language
+        displayName = LanguageHelpers.displayNameFromLanguage language
+    in
+    option
+        [ (attribute "key" cc)
+        , value cc
+        ]
+        [ text displayName ]
 
 view : Model -> Html Msg
 view { chosenLanguage, displayedLanguages } =
@@ -203,7 +107,7 @@ view { chosenLanguage, displayedLanguages } =
 
         Just { contentCode } ->
             select
-                [ value (fromContentCode contentCode)
+                [ value (LanguageHelpers.fromContentCode contentCode)
                 , onChange UpdateLanguage
                 ]
                 (List.map viewOption displayedLanguages)

@@ -5,7 +5,7 @@ import Data.Project as Project
 import Edit
 import Html exposing (Html)
 import Http exposing (stringResolver)
-import LanguageSelect
+import LanguageHelpers
 import Loading
 import ProjectAccess exposing (ProjectAccess)
 import Task exposing (Task)
@@ -26,7 +26,7 @@ init ( { flags, kl, key, ll, pn } as initValues ) =
                 , key = key
                 , ll = ll
                 , pn = pn
-                , model = Api.Loading
+                , model = Api.Loading (Project.initEmptyProject flags.setupEditorName)
                 }
     in
     ( editModel
@@ -41,8 +41,8 @@ init ( { flags, kl, key, ll, pn } as initValues ) =
 fetchProject : ProjectAccess -> Task Http.Error Project.Model
 fetchProject { flags, kl, ll, pn } =
     let
-        kcc = LanguageSelect.contentCodeFromLanguage kl
-        lcc = LanguageSelect.contentCodeFromLanguage ll
+        kcc = LanguageHelpers.contentCodeStringFromLanguage kl
+        lcc = LanguageHelpers.contentCodeStringFromLanguage ll
         url = Builder.relative [flags.candorUrl, "read", kcc, lcc, pn] []
     in
     Http.task
@@ -75,6 +75,7 @@ update msg model =
                     ( { model | project = Edit.Clean (Api.Loaded updatedProject) }
                     , Cmd.none
                     )
+
                 Err _ ->
                     ( { model | project = Edit.Clean Api.Failed }
                     , Cmd.none
@@ -93,19 +94,21 @@ update msg model =
             let
                 -- If any data is still Loading, change it to LoadingSlowly
                 -- so `view` knows to render a spinner.
-                updatedProjectModel =
+                updatedModel =
                     case model.project of
-                        Edit.Clean Api.Loading ->
-                            Api.LoadingSlowly
+                        Edit.Clean (Api.Loading p) ->
+                            { model | project = Edit.Clean (Api.LoadingSlowly p) }
 
-                        Edit.Clean pm ->
-                            pm
+                        Edit.Dirty (Api.Loading p) ->
+                            { model | project = Edit.Dirty (Api.LoadingSlowly p) }
 
-                        Edit.Dirty pm ->
-                            pm
+                        Edit.Clean _ ->
+                            model
+
+                        Edit.Dirty _ ->
+                            model
             in
-            ( { model | project = Edit.Clean updatedProjectModel }
-            , Cmd.none )
+            ( updatedModel , Cmd.none )
 
 view : Model -> Html Msg
 view model =

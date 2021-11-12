@@ -9,7 +9,7 @@ import Html exposing (Html, button, div,  text)
 import Html.Attributes exposing (class)
 import Html.Events exposing (onClick)
 import Http exposing (bytesResolver)
-import LanguageSelect
+import LanguageHelpers
 import Loading
 import Routes
 import Task exposing (Task)
@@ -33,9 +33,9 @@ type alias Model =
 type alias Init =
     { flags : Flags.Model
     , imageRepository : String
-    , kl : LanguageSelect.Language
+    , kl : LanguageHelpers.Language
     , key : Navigation.Key
-    , ll : LanguageSelect.Language
+    , ll : LanguageHelpers.Language
     , pn : String
     }
 
@@ -52,8 +52,8 @@ init ( { flags, key, pn } as initValues ) =
 postGenerationRequest : Init -> Task Http.Error Bytes
 postGenerationRequest { flags, imageRepository, kl, ll, pn } =
     let
-        kcc = LanguageSelect.contentCodeFromLanguage kl
-        lcc = LanguageSelect.contentCodeFromLanguage ll
+        kcc = LanguageHelpers.contentCodeStringFromLanguage kl
+        lcc = LanguageHelpers.contentCodeStringFromLanguage ll
         url = Builder.relative [flags.candorUrl, "generate", imageRepository, kcc, lcc, pn] []
     in
     Http.task

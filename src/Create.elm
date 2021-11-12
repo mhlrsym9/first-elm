@@ -4,6 +4,7 @@ import Browser.Navigation as Navigation
 import Html exposing (Html, button, div, input, label, text)
 import Html.Attributes exposing (class, disabled, type_, value)
 import Html.Events exposing (onClick, onInput)
+import LanguageHelpers
 import LanguageSelect
 import Routes
 import ViewHelpers
@@ -24,7 +25,7 @@ initialData navigationKey =
     , navigationKey = navigationKey
     }
 
-init : Navigation.Key -> LanguageSelect.Languages -> Model
+init : Navigation.Key -> LanguageHelpers.Model -> Model
 init key languages =
     let
         knownLanguageModel = LanguageSelect.init languages
@@ -74,8 +75,8 @@ update msg model =
                 (Routes.routeToUrl
                     (
                         Routes.EditNew
-                            (LanguageSelect.getContentCode knownLanguageModel)
-                            (LanguageSelect.getContentCode learningLanguageModel)
+                            (LanguageSelect.getChosenContentCodeString knownLanguageModel)
+                            (LanguageSelect.getChosenContentCodeString learningLanguageModel)
                             (Just projectName)
                     )
                 )
@@ -90,8 +91,8 @@ isCreateButtonDisabled model =
     case model of
         Success { projectName } klm llm ->
             let
-                knownLanguage = LanguageSelect.getChosenLanguage klm
-                learningLanguage = LanguageSelect.getChosenLanguage llm
+                knownLanguage = LanguageSelect.getChosenDisplayLanguage klm
+                learningLanguage = LanguageSelect.getChosenDisplayLanguage llm
             in
                 String.isEmpty projectName
                 || String.isEmpty knownLanguage

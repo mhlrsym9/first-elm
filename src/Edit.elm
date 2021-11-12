@@ -11,7 +11,7 @@ import Http exposing (jsonBody, stringResolver)
 import Json.Decode exposing (Decoder, succeed, string)
 import Json.Decode.Pipeline exposing (required)
 import Json.Encode as Encode
-import LanguageSelect
+import LanguageHelpers
 import Loading
 import Routes
 import Task exposing (Task)
@@ -25,8 +25,8 @@ type Modified a =
 
 type alias Model =
     { flags : Flags.Model
-    , knownLanguage : LanguageSelect.Language
-    , learningLanguage : LanguageSelect.Language
+    , knownLanguage : LanguageHelpers.Language
+    , learningLanguage : LanguageHelpers.Language
     , navigationKey : Navigation.Key
     , project : Modified (Api.Status Project.Model)
     , projectName : String
@@ -37,9 +37,9 @@ type alias SaveResult =
 
 type alias Init =
     { flags : Flags.Model
-    , kl : LanguageSelect.Language
+    , kl : LanguageHelpers.Language
     , key : Navigation.Key
-    , ll : LanguageSelect.Language
+    , ll : LanguageHelpers.Language
     , pn : String
     , model : Api.Status Project.Model
     }
@@ -89,11 +89,11 @@ saveProjectDecoder =
     succeed SaveResult
         |> required "id" string
 
-encodeProject : LanguageSelect.Language -> LanguageSelect.Language -> String -> Project.Model -> Encode.Value
+encodeProject : LanguageHelpers.Language -> LanguageHelpers.Language -> String -> Project.Model -> Encode.Value
 encodeProject kl ll projectName project =
     Encode.object
-        [ ( "l1", Encode.string ( LanguageSelect.contentCodeFromLanguage kl ) )
-        , ( "l2", Encode.string ( LanguageSelect.contentCodeFromLanguage ll ) )
+        [ ( "l1", Encode.string ( LanguageHelpers.contentCodeStringFromLanguage kl ) )
+        , ( "l2", Encode.string ( LanguageHelpers.contentCodeStringFromLanguage ll ) )
         , ( "project", Encode.string projectName )
         , ( "slides", Project.encodeProject project )
         ]
@@ -161,24 +161,24 @@ update msg ( { knownLanguage, learningLanguage, projectName, project, flags } as
             case result of
                 Ok _ ->
                     case project of
-                        Dirty (Api.Updating p) ->
-                            ( { model | project = Clean (Api.Loaded p) }, Cmd.none )
+                        Dirty (Api.Loading pm) ->
+                            ( { model | project = Clean (Api.Loaded pm) }, Cmd.none )
 
-                        Dirty (Api.UpdatingSlowly p) ->
-                            ( { model | project = Clean (Api.Loaded p) }, Cmd.none )
+                        Dirty (Api.LoadingSlowly pm) ->
+                            ( { model | project = Clean (Api.Loaded pm) }, Cmd.none )
 
                         _ ->
                             ( model, Cmd.none )
 
                 Err _ ->
-                    ( { model | project = Clean Api.Failed }
+                    ( { model | project = Dirty Api.Failed }
                     , Cmd.none
                     )
 
         PassedSlowSaveThreshold ->
             case project of
-                Dirty (Api.Updating projectModel) ->
-                    ( { model | project = Dirty (Api.UpdatingSlowly projectModel) }
+                Dirty (Api.Loading pm) ->
+                    ( { model | project = Dirty (Api.LoadingSlowly pm) }
                     , Cmd.none )
 
                 _ ->
@@ -214,10 +214,10 @@ update msg ( { knownLanguage, learningLanguage, projectName, project, flags } as
 
         Save ->
             case project of
-                Dirty (Api.Loaded projectModel) ->
-                    ( { model | project = Dirty (Api.Updating projectModel) }
+                Dirty (Api.Loaded pm) ->
+                    ( { model | project = Dirty (Api.Loading pm) }
                     , Cmd.batch
-                        [ encodeProject knownLanguage learningLanguage projectName projectModel
+                        [ encodeProject knownLanguage learningLanguage projectName pm
                             |> saveProject flags.candorUrl
                             |> Task.attempt CompletedProjectSave
                         , Task.perform (\_ -> PassedSlowSaveThreshold) Loading.slowThreshold
@@ -268,59 +268,71 @@ viewSaveButton { project } =
         , disabled disabledState ]
         [ text "Save Project" ]
 
+viewCancelButton : Html Msg
+viewCancelButton =
+    button
+        [ onClick Cancel ]
+        [ text "Return to Home Screen" ]
+
 viewActionButtons : Model -> Html Msg
 viewActionButtons model =
     div
         [ class "edit-page-action-buttons" ]
         [ viewSaveButton model
-        , button
-            [ onClick Cancel ]
-            [ text "Return to Home Screen" ]
+        , viewCancelButton
         ]
 
-loadedView : Model -> Project.Model -> Html Msg
+loadedView : Model -> Project.Model -> List (Html Msg)
 loadedView model projectModel =
-    div
-        [ class "edit-page" ]
-        [ viewEditPageInfo model
-        , viewActionButtons model
-        , Project.view projectModel
-            |> Html.map ProjectMsg
-        ]
+    [ viewEditPageInfo model
+    , viewActionButtons model
+    , Project.view projectModel
+        |> Html.map ProjectMsg
+    ]
+
+errorView : Model -> String -> List (Html Msg)
+errorView { projectName } errorStr =
+    [ div
+        [ ]
+        [ text ("Project " ++ projectName ++ errorStr) ]
+    , div
+        [ ]
+        [ viewCancelButton ]
+    ]
+
+loadingSlowlyView : Model -> List (Html Msg)
+loadingSlowlyView { flags } =
+    [ Loading.icon flags.loadingPath ]
 
 view : Model -> Html Msg
-view ( {  project, flags } as model ) =
-    case project of
-        Clean (Api.Loaded projectModel) ->
-            loadedView model projectModel
+view ( {  project, projectName, flags } as model ) =
+    let
+        elements =
+            case project of
+                Clean Api.Failed ->
+                    errorView model " could not be created."
 
-        Dirty (Api.Loaded projectModel) ->
-            loadedView model projectModel
+                Dirty Api.Failed ->
+                    errorView model " coult not be saved."
 
-        Dirty (Api.Updating projectModel) ->
-            loadedView model projectModel
+                Clean (Api.Loaded projectModel) ->
+                    loadedView model projectModel
 
-        Dirty (Api.UpdatingSlowly projectModel) ->
-            loadedView model projectModel
+                Dirty (Api.Loaded projectModel) ->
+                    loadedView model projectModel
 
-        Clean Api.LoadingSlowly ->
-            div
-                [ ]
-                [ (Loading.icon flags.loadingPath) ]
+                Clean (Api.Loading projectModel) ->
+                    loadedView model projectModel
 
-        Dirty Api.LoadingSlowly ->
-            div
-                [ ]
-                [ (Loading.icon flags.loadingPath) ]
+                Dirty (Api.Loading projectModel) ->
+                    loadedView model projectModel
 
-        Clean (Api.CreatingSlowly _) ->
-            div
-                [ ]
-                [ (Loading.icon flags.loadingPath) ]
+                Clean (Api.LoadingSlowly _) ->
+                    loadingSlowlyView model
 
-        _ ->
-            div
-                [ ]
-                [ ]
-
-
+                Dirty (Api.LoadingSlowly projectModel) ->
+                    List.concat [(loadingSlowlyView model), (loadedView model projectModel)]
+    in
+    div
+        [ class "edit-page "]
+        elements

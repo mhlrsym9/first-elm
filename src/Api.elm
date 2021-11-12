@@ -5,14 +5,10 @@ import Http
 import Json.Decode exposing (Decoder)
 
 type Status a
-    = Creating a
-    | CreatingSlowly a
-    | Failed
-    | Loading
-    | LoadingSlowly
+    = Failed
+    | Loading a
+    | LoadingSlowly a
     | Loaded a
-    | Updating a
-    | UpdatingSlowly a
 
 handleResponse : (body -> Result Http.Error a) -> Http.Response body -> Result Http.Error a
 handleResponse fnc response =

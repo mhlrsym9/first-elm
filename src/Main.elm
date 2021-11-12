@@ -17,7 +17,7 @@ import Html.Attributes exposing (class)
 import Http exposing (Response, stringResolver)
 import Json.Decode exposing (Decoder, string)
 import Json.Decode.Pipeline exposing (required)
-import LanguageSelect
+import LanguageHelpers
 import Loading
 import Open
 import Procedure
@@ -78,21 +78,21 @@ type alias Version =
 
 type alias Model =
     { flags : Flags.Model
-    , languages : Api.Status LanguageSelect.Languages
+    , languages : Api.Status LanguageHelpers.Model
     , navigationKey : Navigation.Key
     , page : Page
     , procModel : (Procedure.Program.Model Msg)
-    , serverVersion : Version
+    , serverVersion : Api.Status Version
     }
 
 initialModel : Navigation.Key -> Flags -> Model
 initialModel navigationKey flags =
     { flags = Flags.init flags
-    , languages = Api.Loading
+    , languages = Api.Loading LanguageHelpers.initEmptyLanguageHelpers
     , navigationKey = navigationKey
     , page = NotFound
     , procModel = Procedure.Program.init
-    , serverVersion = { version = "" }
+    , serverVersion = Api.Loading { version = "" }
     }
 
 versionDecoder : Decoder Version
@@ -114,9 +114,9 @@ fetchVersion flags =
         , timeout = Nothing
         }
 
-fetchPreliminaryInfo : Flags -> Task Error ( LanguageSelect.Languages, Version )
+fetchPreliminaryInfo : Flags -> Task Error ( LanguageHelpers.Model, Version )
 fetchPreliminaryInfo flags =
-    LanguageSelect.fetchLanguages
+    LanguageHelpers.fetchLanguages
         |> Task.mapError HttpError
         |> Task.andThen
             (\languages ->
@@ -127,7 +127,7 @@ fetchPreliminaryInfo flags =
                     _ ->
                         fetchVersion flags
                             |> Task.mapError HttpError
-                            |> Task.map (\v -> (languages, v))
+                            |> Task.map (\v -> ((LanguageHelpers.init languages), v))
             )
 
 init : Flags -> Url -> Navigation.Key -> ( Model, Cmd Msg )
@@ -148,7 +148,7 @@ init flags url navigationKey =
 ---- UPDATE ----
 
 type Msg
-    = CompletedPreliminaryLoad (Result Error ( LanguageSelect.Languages, Version ) )
+    = CompletedPreliminaryLoad (Result Error ( LanguageHelpers.Model, Version ) )
     | ConsoleOut String
     | CreateMsg Create.Msg
     | DeleteMsg Delete.Msg
@@ -168,20 +168,18 @@ type Msg
 setNewPage : Maybe Routes.Route -> Model -> ( Model, Cmd Msg )
 setNewPage maybeRoute ( { navigationKey, flags, languages } as model ) =
     let
-        theLanguages =
+        languagesModel =
             case languages of
                 Api.Loaded ls ->
                     ls
 
                 _ ->
-                    []
-
-        languagesModel = LanguageSelect.init theLanguages
+                    LanguageHelpers.init []
     in
     case maybeRoute of
         Just Routes.Create ->
             let
-                createModel = Create.init navigationKey theLanguages
+                createModel = Create.init navigationKey languagesModel
             in
             ( { model | page = Create createModel }
             , Cmd.none
@@ -194,9 +192,9 @@ setNewPage maybeRoute ( { navigationKey, flags, languages } as model ) =
                         ( deleteModel, deleteCommand ) =
                             Delete.init
                                 { flags = flags
-                                , kl = LanguageSelect.languageFromContentCode languagesModel k
+                                , kl = LanguageHelpers.languageFromContentCode languagesModel k
                                 , key = navigationKey
-                                , ll = LanguageSelect.languageFromContentCode languagesModel l
+                                , ll = LanguageHelpers.languageFromContentCode languagesModel l
                                 , pn =  projectName
                                 }
                     in
@@ -213,9 +211,9 @@ setNewPage maybeRoute ( { navigationKey, flags, languages } as model ) =
                         ( editModel, editCmd ) =
                             EditNew.init
                                 { flags = flags
-                                , kl = LanguageSelect.languageFromContentCode languagesModel k
+                                , kl = LanguageHelpers.languageFromContentCode languagesModel k
                                 , key = navigationKey
-                                , ll = LanguageSelect.languageFromContentCode languagesModel l
+                                , ll = LanguageHelpers.languageFromContentCode languagesModel l
                                 , pn =  projectName
                                 }
                     in
@@ -233,8 +231,8 @@ setNewPage maybeRoute ( { navigationKey, flags, languages } as model ) =
                             EditExisting.init
                                 { flags = flags
                                 , key = navigationKey
-                                , kl = LanguageSelect.languageFromContentCode languagesModel k
-                                , ll = LanguageSelect.languageFromContentCode languagesModel l
+                                , kl = LanguageHelpers.languageFromContentCode languagesModel k
+                                , ll = LanguageHelpers.languageFromContentCode languagesModel l
                                 , pn = projectName
                                 }
                     in
@@ -252,8 +250,8 @@ setNewPage maybeRoute ( { navigationKey, flags, languages } as model ) =
                             GenerateAlphabet.init
                                 { flags = flags
                                 , key = navigationKey
-                                , kl = LanguageSelect.languageFromContentCode languagesModel k
-                                , ll = LanguageSelect.languageFromContentCode languagesModel l
+                                , kl = LanguageHelpers.languageFromContentCode languagesModel k
+                                , ll = LanguageHelpers.languageFromContentCode languagesModel l
                                 , pn = projectName
                                 }
                     in
@@ -271,8 +269,8 @@ setNewPage maybeRoute ( { navigationKey, flags, languages } as model ) =
                             GenerateCourseWare.init
                                 { flags = flags
                                 , key = navigationKey
-                                , kl = LanguageSelect.languageFromContentCode languagesModel k
-                                , ll = LanguageSelect.languageFromContentCode languagesModel l
+                                , kl = LanguageHelpers.languageFromContentCode languagesModel k
+                                , ll = LanguageHelpers.languageFromContentCode languagesModel l
                                 , pn = projectName
                                 }
                     in
@@ -284,16 +282,15 @@ setNewPage maybeRoute ( { navigationKey, flags, languages } as model ) =
 
         Just Routes.Home ->
             let
-                ( startModel, startCmd ) =
-                    Start.init navigationKey
+                startModel = Start.init navigationKey
             in
             ( { model | page = Start startModel }
-            , Cmd.map StartMsg startCmd )
+            , Cmd.none )
 
         Just Routes.Open ->
             let
                 ( openModel, openCmd ) =
-                    Open.init navigationKey flags theLanguages
+                    Open.init navigationKey flags languagesModel
             in
             ( { model | page = Open openModel }
             , Cmd.map OpenMsg openCmd )
@@ -316,8 +313,8 @@ update msg model =
     case ( msg, model.page ) of
         ( CompletedPreliminaryLoad result, _ ) ->
             case result of
-                Ok (languages, version) ->
-                    ( { model | languages = Api.Loaded languages, serverVersion = version }, Cmd.none )
+                Ok (languagesModel, version) ->
+                    ( { model | languages = Api.Loaded languagesModel, serverVersion = Api.Loaded version }, Cmd.none )
 
                 Err _ ->
                     ( { model | languages = Api.Failed }, Cmd.none )
@@ -433,15 +430,24 @@ update msg model =
             let
                 -- If any data is still Loading, change it to LoadingSlowly
                 -- so `view` knows to render a spinner.
-                languages =
+                updatedLanguages =
                     case model.languages of
-                        Api.Loading ->
-                            Api.LoadingSlowly
+                        Api.Loading ls ->
+                            Api.LoadingSlowly ls
 
                         other ->
                             other
+
+                updatedServerVersion =
+                    case model.serverVersion of
+                        Api.Loading sv ->
+                            Api.LoadingSlowly sv
+
+                        other ->
+                            other
+
             in
-            ( { model | languages = languages }, Cmd.none )
+            ( { model | languages = updatedLanguages, serverVersion = updatedServerVersion }, Cmd.none )
 
         ( ProcMsg pMsg, _ ) ->
             Procedure.Program.update pMsg model.procModel
@@ -485,9 +491,18 @@ viewStandardHeader header =
 
 viewVersion : Model -> Html Msg
 viewVersion { flags, serverVersion } =
+    let
+        theVersion =
+            case serverVersion of
+                Api.Loaded v ->
+                    v.version
+
+                _ ->
+                    "Cander V2 Server Version <Unknown> "
+    in
     div
         [ ]
-        [ text ( serverVersion.version ++ " Elm Client " ++ Flags.versionString flags ) ]
+        [ text ( theVersion ++ " Elm Client " ++ Flags.versionString flags ) ]
 
 viewHeader : Model -> Html Msg
 viewHeader ( { page } as model ) =
@@ -530,24 +545,30 @@ viewHeader ( { page } as model ) =
         ]
 
 viewContent : Model -> ( String, Html Msg )
-viewContent ( { flags, languages } as model ) =
+viewContent ( { flags, languages, serverVersion } as model ) =
     let
         contents =
-            case languages of
-                Api.Loading ->
+            case (languages, serverVersion) of
+                (Api.Loading _, _) ->
                     div [] []
 
-                Api.LoadingSlowly ->
+                (_, Api.Loading _) ->
+                    div [] []
+
+                (Api.LoadingSlowly _, _) ->
                     div [] [ ( Loading.icon flags.loadingPath ) ]
 
-                Api.Failed ->
+                (_, Api.LoadingSlowly _) ->
+                    div [] [ ( Loading.icon flags.loadingPath ) ]
+
+                (Api.Failed, _) ->
                     div [] [ Loading.error "languages" ]
 
-                Api.Loaded _ ->
-                    viewHeader model
+                (_, Api.Failed) ->
+                    div [] [ Loading.error "server version" ]
 
-                _ ->
-                    div [] []
+                (Api.Loaded _, Api.Loaded _) ->
+                    viewHeader model
 
     in
     ( "Candor HTML", contents )

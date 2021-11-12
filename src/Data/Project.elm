@@ -1,4 +1,4 @@
-module Data.Project exposing (encodeProject, establishIndexes, establishSlideUUIDs, projectDecoder, init, initNewProject, Model, Msg(..), storeSlideContents, update, view)
+module Data.Project exposing (encodeProject, establishIndexes, establishSlideUUIDs, projectDecoder, init, initEmptyProject, initNewProject, Model, Msg(..), storeSlideContents, update, view)
 
 import Data.ProjectHelpers as ProjectHelpers
 import Data.Slide as Slide
@@ -14,10 +14,13 @@ import Json.Encode as Encode
 import Random
 import UUID exposing (Seeds)
 
+type alias SlideDict =
+    Dict Int Slide.Model
+
 type alias Model =
     { slideIndex : Int
     , setupEditorName : String
-    , slides : Dict Int Slide.Model
+    , slides : SlideDict
     , seeds : Seeds
     }
 
@@ -52,16 +55,17 @@ encodeProject : Model -> Encode.Value
 encodeProject { slides } =
     slides |> Dict.values |> Encode.list Slide.encodeSlide
 
-init : String -> (Model, Cmd Msg)
-init sen =
-    (
-        { slideIndex = 0
-        , slides = Dict.empty
-        , setupEditorName = sen
-        , seeds = initialSeeds
-        }
-        , Cmd.none
-    )
+initProject : SlideDict -> String -> Seeds -> Model
+initProject slides sen seeds =
+    { slideIndex = 0
+    , slides = slides
+    , setupEditorName = sen
+    , seeds = seeds
+    }
+
+initEmptyProject : String -> Model
+initEmptyProject sen =
+    initProject Dict.empty sen initialSeeds
 
 initNewProject : String -> Model
 initNewProject sen =
@@ -69,11 +73,13 @@ initNewProject sen =
         seeds = initialSeeds
         (slides, updatedSeeds) = createNewSlide 0 sen seeds
     in
-    { slideIndex = 0
-    , slides = slides
-    , setupEditorName = sen
-    , seeds = updatedSeeds
-    }
+    initProject slides sen updatedSeeds
+
+init : String -> (Model, Cmd Msg)
+init sen =
+    ( initEmptyProject sen
+    , Cmd.none
+    )
 
 updateSlideIndexes : Dict Int Slide.Model -> Dict Int Slide.Model
 updateSlideIndexes slides =

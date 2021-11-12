@@ -15,9 +15,9 @@ initialModel : Navigation.Key -> Model
 initialModel navigationKey =
     { navigationKey = navigationKey }
 
-init : Navigation.Key -> ( Model, Cmd Msg )
+init : Navigation.Key -> Model
 init navigationKey =
-    ( initialModel navigationKey, Cmd.none )
+    initialModel navigationKey
 
 -- UPDATE
 

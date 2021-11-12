@@ -23,7 +23,6 @@ error : String -> Html msg
 error str =
     Html.text ("Error loading " ++ str ++ ".")
 
-
 slowThreshold : Task x ()
 slowThreshold =
     Process.sleep 500

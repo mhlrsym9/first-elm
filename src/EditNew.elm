@@ -31,7 +31,7 @@ init { flags, key, kl, ll, pn } =
             , key = key
             , kl = kl
             , ll = ll
-            , model = Api.Creating projectModel
+            , model = Api.Loading projectModel
             , pn = pn
             }
     in
@@ -78,11 +78,11 @@ update msg ( { project } as model ) =
             case result of
                 Ok _ ->
                     case project of
-                        Edit.Clean (Api.Creating projectModel) ->
+                        Edit.Clean (Api.Loading projectModel) ->
                             ( { model | project = Edit.Clean (Api.Loaded projectModel) }
                             , Cmd.none )
 
-                        Edit.Clean (Api.CreatingSlowly projectModel) ->
+                        Edit.Clean (Api.LoadingSlowly projectModel) ->
                             ( { model | project = Edit.Clean (Api.Loaded projectModel) }
                             , Cmd.none )
 
@@ -105,8 +105,8 @@ update msg ( { project } as model ) =
 
         PassedSlowCreateThreshold ->
             case project of
-                Edit.Clean (Api.Creating projectModel) ->
-                    ( { model | project = Edit.Clean (Api.CreatingSlowly projectModel) }
+                Edit.Clean (Api.Loading projectModel) ->
+                    ( { model | project = Edit.Clean (Api.LoadingSlowly projectModel) }
                     , Cmd.none )
 
                 _ ->
