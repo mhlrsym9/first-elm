@@ -19,7 +19,7 @@ type alias Model =
 init : ProjectAccess -> (Model, Cmd Msg)
 init ( { flags, kl, key, ll, pn } as initValues ) =
     let
-        ( editModel, editMsg ) =
+        editModel =
             Edit.init
                 { flags = flags
                 , kl = kl
@@ -31,8 +31,7 @@ init ( { flags, kl, key, ll, pn } as initValues ) =
     in
     ( editModel
     , Cmd.batch
-        [ Cmd.map EditMsg editMsg
-        , (fetchProject initValues)
+        [ (fetchProject initValues)
             |> Task.attempt CompletedProjectLoad
         , Task.perform (\_ -> PassedSlowLoadThreshold) Loading.slowThreshold
         ]

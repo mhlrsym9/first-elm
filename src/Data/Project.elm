@@ -75,11 +75,9 @@ initNewProject sen =
     in
     initProject slides sen updatedSeeds
 
-init : String -> (Model, Cmd Msg)
+init : String -> Model
 init sen =
-    ( initEmptyProject sen
-    , Cmd.none
-    )
+    initEmptyProject sen
 
 updateSlideIndexes : Dict Int Slide.Model -> Dict Int Slide.Model
 updateSlideIndexes slides =

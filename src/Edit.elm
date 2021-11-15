@@ -44,18 +44,15 @@ type alias Init =
     , model : Api.Status Project.Model
     }
 
-init : Init -> (Model, Cmd Msg)
+init : Init -> Model
 init { key, kl, ll, pn, model, flags } =
-    (
-        { flags = flags
-        , knownLanguage = kl
-        , learningLanguage = ll
-        , navigationKey = key
-        , project = Clean model
-        , projectName = pn
-        }
-        , Cmd.none
-    )
+    { flags = flags
+    , knownLanguage = kl
+    , learningLanguage = ll
+    , navigationKey = key
+    , project = Clean model
+    , projectName = pn
+    }
 
 getProjectModel : Model -> Maybe Project.Model
 getProjectModel model =
@@ -313,7 +310,7 @@ view ( {  project, projectName, flags } as model ) =
                     errorView model " could not be created."
 
                 Dirty Api.Failed ->
-                    errorView model " coult not be saved."
+                    errorView model " could not be saved."
 
                 Clean (Api.Loaded projectModel) ->
                     loadedView model projectModel

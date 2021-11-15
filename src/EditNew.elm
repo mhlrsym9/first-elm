@@ -26,7 +26,7 @@ init : ProjectAccess -> (Model, Cmd Msg)
 init { flags, key, kl, ll, pn } =
     let
         projectModel = Project.initNewProject flags.setupEditorName
-        (editModel, editCommands) = Edit.init
+        editModel = Edit.init
             { flags = flags
             , key = key
             , kl = kl
@@ -37,8 +37,7 @@ init { flags, key, kl, ll, pn } =
     in
     ( editModel
     , Cmd.batch
-        [ Cmd.map EditMsg editCommands
-        , Edit.encodeProject kl ll pn projectModel
+        [ Edit.encodeProject kl ll pn projectModel
             |> createProject flags.candorUrl
             |> Task.attempt CompletedProjectCreate
         , Task.perform (\_ -> PassedSlowCreateThreshold) Loading.slowThreshold

@@ -148,7 +148,7 @@ init flags url navigationKey =
 ---- UPDATE ----
 
 type Msg
-    = CompletedPreliminaryLoad (Result Error ( LanguageHelpers.Model, Version ) )
+    = CompletedPreliminaryLoad ( Result Error ( LanguageHelpers.Model, Version ) )
     | ConsoleOut String
     | CreateMsg Create.Msg
     | DeleteMsg Delete.Msg
@@ -317,7 +317,7 @@ update msg model =
                     ( { model | languages = Api.Loaded languagesModel, serverVersion = Api.Loaded version }, Cmd.none )
 
                 Err _ ->
-                    ( { model | languages = Api.Failed }, Cmd.none )
+                    ( { model | languages = Api.Failed, serverVersion = Api.Failed }, Cmd.none )
 
         ( ConsoleOut urlStr, _ ) ->
             ( model, consoleLog urlStr )
@@ -498,7 +498,7 @@ viewVersion { flags, serverVersion } =
                     v.version
 
                 _ ->
-                    "Cander V2 Server Version <Unknown> "
+                    "Candor V2 Server Version <Unknown> "
     in
     div
         [ ]
@@ -584,7 +584,6 @@ view model =
     }
 
 ---- PROGRAM ----
-
 
 main : Program Flags Model Msg
 main =
