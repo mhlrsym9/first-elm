@@ -4,7 +4,8 @@ import * as serviceWorker from './serviceWorker';
 import '@tinymce/tinymce-webcomponent';
 import {setupEditorName, extractEditorContents} from "./tinymce.js";
 import loadingPath from '../public/images/loading.svg'
-import metadata from './metadata.json'
+import metadata from './metadata.json';
+import '@github/clipboard-copy-element';
 
 let app = Elm.Main.init({
     node: document.getElementById('root'),

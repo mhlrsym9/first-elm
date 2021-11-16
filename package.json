@@ -2,6 +2,7 @@
   "name": "first-elm",
   "version": "1.0.0",
   "dependencies": {
+    "@github/clipboard-copy-element": "^1.1.2",
     "@tinymce/tinymce-react": "^3.12.6",
     "@tinymce/tinymce-webcomponent": "^1.2.0"
   },
