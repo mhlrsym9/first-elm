@@ -206,9 +206,13 @@ type Msg
     | ImageTransferred (Result Http.Error SlideComponent)
     | ProcedureMsg (Procedure.Program.Msg Msg)
     | QuestionsAreaMsg QuestionsArea.Msg
+    | SoundRequested
+    | SoundTransferred (Result Http.Error SlideComponent)
     | UpdateImagesVisibility Images Sounds Videos
     | UpdateSoundsVisibility Images Sounds Videos
     | UpdateVideosVisibility Images Sounds Videos
+    | VideoRequested
+    | VideoTransferred (Result Http.Error SlideComponent)
 
 storeSlideContents : String -> Model -> Model
 storeSlideContents slideContents model =
@@ -235,31 +239,31 @@ transferToServer { initParams } f componentBytes =
         , timeout = Nothing
         }
 
-addImageToProject : Model -> Cmd Msg
-addImageToProject model =
-    Procedure.fetch (Select.file ["image/png", "image/jpg"])
+addComponentToProject : Model -> (List String) -> ( (Result Http.Error SlideComponent) -> Msg ) -> Cmd Msg
+addComponentToProject model mimeTypes transferred =
+    Procedure.fetch (Select.file mimeTypes)
         |> Procedure.andThen
             (\f ->
                 File.toBytes f
                     |> Procedure.fromTask
                     |> Procedure.map
-                        (\bytes -> (f, bytes) )
+                        (\bytes -> (f, bytes))
             )
         |> Procedure.andThen
             (\(f, bytes) ->
                 (transferToServer model f bytes)
                     |> Procedure.fromTask
             )
-        |> Procedure.try ProcedureMsg ImageTransferred
+        |> Procedure.try ProcedureMsg transferred
 
 update : Msg -> Model -> (Model, Cmd Msg)
-update msg ( { images, procModel, questionsArea } as model ) =
+update msg ( { images, procModel, questionsArea, sounds, videos } as model ) =
     case msg of
         CopyUrl _ ->
             ( model, Cmd.none )
 
         ImageRequested ->
-            ( model, addImageToProject model)
+            ( model, addComponentToProject model ["image/png", "image/jpg"] ImageTransferred )
 
         ImageTransferred result ->
             case result of
@@ -267,6 +271,7 @@ update msg ( { images, procModel, questionsArea } as model ) =
                     case images of
                         VisibleImages l ->
                             ( { model | images = VisibleImages ( image :: l ) }, Cmd.none )
+
                         _ ->
                             ( model, Cmd.none )
 
@@ -283,6 +288,22 @@ update msg ( { images, procModel, questionsArea } as model ) =
                     QuestionsArea.update questionsAreaMsg questionsArea
             in
             ( { model | questionsArea = updatedQuestionsAreaModel }, Cmd.none )
+
+        SoundRequested ->
+            ( model, addComponentToProject model ["audio/mpg"] ImageTransferred )
+
+        SoundTransferred result ->
+            case result of
+                Ok sound ->
+                    case sounds of
+                        VisibleSounds l ->
+                            ( { model | sounds = VisibleSounds ( sound :: l ) }, Cmd.none )
+
+                        _ ->
+                            ( model, Cmd.none )
+
+                Err _ ->
+                    ( model, Cmd.none )
 
         UpdateImagesVisibility updatedImages updatedSounds updatedVideos ->
             (
@@ -313,6 +334,22 @@ update msg ( { images, procModel, questionsArea } as model ) =
                 }
                 , Cmd.none
             )
+
+        VideoRequested ->
+            ( model, addComponentToProject model ["video/mp4"] ImageTransferred )
+
+        VideoTransferred result ->
+            case result of
+                Ok video ->
+                    case videos of
+                        VisibleVideos l ->
+                            ( { model | videos = VisibleVideos ( video :: l ) }, Cmd.none )
+
+                        _ ->
+                            ( model, Cmd.none )
+
+                Err _ ->
+                    ( model, Cmd.none )
 
 -- VIEW
 
@@ -425,27 +462,27 @@ viewSlideVideos { images, sounds, videos } =
         [ onClick ( UpdateVideosVisibility updatedImages updatedSounds updatedVideos ) ]
         [ text "Videos" ]
 
-viewLoadImageFromFile : Html Msg
-viewLoadImageFromFile =
+viewLoadComponentFromFile : Msg -> Html Msg
+viewLoadComponentFromFile msg =
     button
-        [ onClick ImageRequested ]
+        [ onClick msg ]
         [ text "Select file" ]
 
-viewComponent : InitParams -> SlideComponent -> List (Html Msg) -> List (Html Msg)
-viewComponent initParams sc l =
+viewComponent : String -> InitParams -> SlideComponent -> List (Html Msg) -> List (Html Msg)
+viewComponent baseUrl { flags, knownLanguage, learningLanguage, projectName } { name } l =
     let
         url = Builder.relative
-            [ initParams.flags.candorUrl
-            , "image"
-            , LanguageHelpers.contentCodeStringFromLanguage initParams.knownLanguage
-            , LanguageHelpers.contentCodeStringFromLanguage initParams.learningLanguage
-            , initParams.projectName
-            , sc.name
+            [ flags.candorUrl
+            , baseUrl
+            , LanguageHelpers.contentCodeStringFromLanguage knownLanguage
+            , LanguageHelpers.contentCodeStringFromLanguage learningLanguage
+            , projectName
+            , name
             ] []
         entry =
             tr
                 [ ]
-                [ text sc.name
+                [ text name
                 , Html.node "clipboard-copy"
                     [ attribute "value" url
                     , class "w3-button w3-black w3-round"
@@ -455,12 +492,12 @@ viewComponent initParams sc l =
     in
     entry :: l
 
-viewComponents : InitParams -> List SlideComponent -> Html Msg
-viewComponents initParams components =
+viewComponents : Msg -> String -> InitParams -> List SlideComponent -> Html Msg
+viewComponents msg baseUrl initParams components =
     div
         [ ]
-        [ viewLoadImageFromFile
-        , List.foldl (viewComponent initParams) [ ] components
+        [ viewLoadComponentFromFile msg
+        , List.foldl (viewComponent baseUrl initParams) [ ] components
           |> List.reverse
           |> table [ class "edit-page-slide-components-table" ]
         ]
@@ -469,13 +506,13 @@ viewSlideComponents : Model -> Html Msg
 viewSlideComponents { images, initParams, sounds, videos } =
     case ( images, sounds, videos ) of
         ( VisibleImages vis, HiddenSounds _, HiddenVideos _ ) ->
-            viewComponents initParams vis
+            viewComponents ImageRequested "image" initParams vis
 
         ( HiddenImages _, VisibleSounds vss, HiddenVideos _ ) ->
-            viewComponents initParams vss
+            viewComponents SoundRequested "audio" initParams vss
 
         ( HiddenImages _, HiddenSounds _, VisibleVideos vvs ) ->
-            viewComponents initParams vvs
+            viewComponents VideoRequested "video" initParams vvs
 
         _ ->
             div [ ] [ ]
