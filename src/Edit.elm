@@ -190,20 +190,20 @@ update msg ( { knownLanguage, learningLanguage, projectName, project, flags } as
                     case project of
                         Clean (Api.Loaded projectModel) ->
                             let
-                                updatedProjectModel =
+                                ( updatedProjectModel, updatedCommands ) =
                                     Project.update projectMsg projectModel
                             in
                             ( { model | project = Dirty (Api.Loaded updatedProjectModel) }
-                            , Cmd.none
+                            , Cmd.map ProjectMsg updatedCommands
                             )
 
                         Dirty (Api.Loaded projectModel) ->
                             let
-                                updatedProjectModel =
+                                ( updatedProjectModel, updatedCommands ) =
                                     Project.update projectMsg projectModel
                             in
                             ( { model | project = Dirty (Api.Loaded updatedProjectModel) }
-                            , Cmd.none
+                            , Cmd.map ProjectMsg updatedCommands
                             )
 
                         _ ->

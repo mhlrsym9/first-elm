@@ -25,7 +25,13 @@ type alias CreateResult =
 init : ProjectAccess -> (Model, Cmd Msg)
 init { flags, key, kl, ll, pn } =
     let
-        projectModel = Project.initNewProject flags.setupEditorName
+        projectInitParams =
+            { flags = flags
+            , knownLanguage = kl
+            , learningLanguage = ll
+            , projectName = pn
+            }
+        projectModel = Project.initNewProject projectInitParams
         editModel = Edit.init
             { flags = flags
             , key = key

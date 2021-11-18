@@ -4,6 +4,7 @@ import Data.ProjectHelpers as ProjectHelpers
 import Data.Slide as Slide
 import Dict exposing (Dict)
 import Dict.Extra
+import Flags exposing (Flags)
 import Html exposing (Html, button, div, text)
 import Html.Attributes exposing (class, disabled)
 import Html.Events exposing (onClick)
@@ -11,27 +12,43 @@ import Json.Decode exposing (Decoder, succeed)
 import Json.Decode.Extra exposing (indexedList)
 import Json.Decode.Pipeline exposing (hardcoded, required)
 import Json.Encode as Encode
+import LanguageHelpers
 import Random
 import UUID exposing (Seeds)
 
 type alias SlideDict =
     Dict Int Slide.Model
 
+type alias InitParams =
+    { flags : Flags.Model
+    , knownLanguage : LanguageHelpers.Language
+    , learningLanguage : LanguageHelpers.Language
+    , projectName : String
+    }
+
 type alias Model =
-    { slideIndex : Int
-    , setupEditorName : String
+    { initParams : InitParams
+    , slideIndex : Int
     , slides : SlideDict
     , seeds : Seeds
     }
 
-slideDecoder : String -> Int -> Decoder (Int, Slide.Model)
-slideDecoder sen index =
-    Slide.slideDecoder sen
+slideDecoder : InitParams -> Int -> Decoder (Int, Slide.Model)
+slideDecoder { flags, knownLanguage, learningLanguage, projectName } index =
+    let
+        slideInitParams =
+            { flags = flags
+            , knownLanguage = knownLanguage
+            , learningLanguage = learningLanguage
+            , projectName = projectName
+            }
+    in
+    Slide.slideDecoder slideInitParams
         |> Json.Decode.map (\s -> (index, s))
 
-slidesDecoder : String -> Decoder (Dict Int Slide.Model)
-slidesDecoder sen =
-    (indexedList (slideDecoder sen))
+slidesDecoder : InitParams -> Decoder (Dict Int Slide.Model)
+slidesDecoder initParams =
+    (indexedList (slideDecoder initParams))
         |> Json.Decode.map (\l -> Dict.fromList l)
 
 initialSeeds : Seeds
@@ -43,41 +60,41 @@ initialSeeds =
         (Random.initialSeed 45678)
     )
 
-projectDecoder : String -> Decoder Model
-projectDecoder sen =
+projectDecoder : InitParams -> Decoder Model
+projectDecoder initParams =
     succeed Model
+        |> hardcoded initParams
         |> hardcoded 0
-        |> hardcoded sen
-        |> required "slides" (slidesDecoder sen)
+        |> required "slides" (slidesDecoder initParams)
         |> hardcoded initialSeeds
 
 encodeProject : Model -> Encode.Value
 encodeProject { slides } =
     slides |> Dict.values |> Encode.list Slide.encodeSlide
 
-initProject : SlideDict -> String -> Seeds -> Model
-initProject slides sen seeds =
-    { slideIndex = 0
+initProject : InitParams -> SlideDict -> Seeds -> Model
+initProject initParams slides seeds =
+    { initParams = initParams
+    , slideIndex = 0
     , slides = slides
-    , setupEditorName = sen
     , seeds = seeds
     }
 
-initEmptyProject : String -> Model
-initEmptyProject sen =
-    initProject Dict.empty sen initialSeeds
+initEmptyProject : InitParams -> Model
+initEmptyProject initParams =
+    initProject initParams Dict.empty initialSeeds
 
-initNewProject : String -> Model
-initNewProject sen =
+initNewProject : InitParams -> Model
+initNewProject initParams =
     let
         seeds = initialSeeds
-        (slides, updatedSeeds) = createNewSlide 0 sen seeds
+        (slides, updatedSeeds) = createNewSlide initParams 0 seeds
     in
-    initProject slides sen updatedSeeds
+    initProject initParams slides updatedSeeds
 
-init : String -> Model
-init sen =
-    initEmptyProject sen
+init : InitParams -> Model
+init initParams =
+    initEmptyProject initParams
 
 updateSlideIndexes : Dict Int Slide.Model -> Dict Int Slide.Model
 updateSlideIndexes slides =
@@ -88,7 +105,7 @@ establishIndexes ( { slides } as model ) =
     { model | slides = Dict.map (\i s -> Slide.establishIndexes i s) slides }
 
 establishSlideUUID : Int -> Slide.Model -> (Dict Int Slide.Model, Seeds) -> (Dict Int Slide.Model, Seeds)
-establishSlideUUID index slideModel ( dict, seeds ) =
+establishSlideUUID index ( { initParams } as slideModel ) ( dict, seeds ) =
     let
         (uuid, updatedSeeds) = UUID.step seeds
         updatedSlide = { slideModel | slideId = UUID.toString uuid }
@@ -112,20 +129,25 @@ type Msg =
     | SlideMsg Slide.Msg
     | UpdateCurrentSlideContents Msg
 
-createNewSlide : Int -> String -> Seeds -> (Dict Int Slide.Model, Seeds)
-createNewSlide slideIndex sen seeds =
+createNewSlide : InitParams -> Int -> Seeds -> (Dict Int Slide.Model, Seeds)
+createNewSlide { flags, knownLanguage, learningLanguage, projectName } slideIndex seeds =
     let
         (uuid, updatedSeeds) = UUID.step seeds
-        newSlide =
-            Slide.init { slideIndex = slideIndex, sen = sen, slideId = UUID.toString uuid }
+        slideInitParams =
+            { flags = flags
+            , knownLanguage = knownLanguage
+            , learningLanguage = learningLanguage
+            , projectName = projectName
+            }
+        newSlide = Slide.init slideInitParams (UUID.toString uuid) slideIndex
     in
     ( Dict.singleton slideIndex newSlide, updatedSeeds )
 
 insertSlideAtSlicePoint : Int -> Model -> Model
-insertSlideAtSlicePoint slicePoint ( { slides, setupEditorName, seeds } as model ) =
+insertSlideAtSlicePoint slicePoint ( { initParams, slides, seeds } as model ) =
     let
         (beforeSlides, afterSlides) = Dict.partition (\i _ -> (i < slicePoint)) slides
-        (newSlides, updatedSeeds) = createNewSlide slicePoint setupEditorName seeds
+        (newSlides, updatedSeeds) = createNewSlide initParams slicePoint seeds
         updatedSlides =
             afterSlides
                 |> Dict.Extra.mapKeys (\k -> k + 1)
@@ -151,7 +173,7 @@ storeSlideContents slideContents ( { slideIndex, slides } as projectModel ) =
         Nothing ->
             projectModel
 
-update : Msg -> Model -> Model
+update : Msg -> Model -> (Model, Cmd Msg)
 update msg ( { slideIndex, slides } as model ) =
     case msg of
         DeleteSlide ->
@@ -162,54 +184,66 @@ update msg ( { slideIndex, slides } as model ) =
                     else
                         slideIndex - 1
             in
-            { model | slides = ProjectHelpers.deleteEntry slideIndex updateSlideIndexes slides
-                    , slideIndex = updatedSlideIndex
-            }
+            (
+                { model | slides = ProjectHelpers.deleteEntry slideIndex updateSlideIndexes slides
+                        , slideIndex = updatedSlideIndex
+                }
+                , Cmd.none
+            )
 
         DisplaySlide updatedSlideIndex ->
-            { model | slideIndex = updatedSlideIndex }
+            ( { model | slideIndex = updatedSlideIndex }, Cmd.none )
 
         InsertSlide ProjectHelpers.Top ->
-            insertSlideAtSlicePoint 0 model
+            ( insertSlideAtSlicePoint 0 model, Cmd.none )
 
         InsertSlide ProjectHelpers.Up ->
-            insertSlideAtSlicePoint slideIndex model
+            ( insertSlideAtSlicePoint slideIndex model, Cmd.none )
 
         InsertSlide ProjectHelpers.Down ->
-            insertSlideAtSlicePoint (slideIndex + 1) model
+            ( insertSlideAtSlicePoint (slideIndex + 1) model, Cmd.none )
 
         InsertSlide ProjectHelpers.Bottom ->
-            insertSlideAtSlicePoint (Dict.size slides) model
+            ( insertSlideAtSlicePoint (Dict.size slides) model, Cmd.none )
 
         Move ProjectHelpers.Top ->
             let
                 updatedSlides = ProjectHelpers.moveEntry
                     slideIndex ProjectHelpers.Increment 0 updateSlideIndexes slides
             in
-            { model
-                | slides = updatedSlides
-                , slideIndex = 0
-            }
+            (
+                { model
+                    | slides = updatedSlides
+                    , slideIndex = 0
+                }
+                , Cmd.none
+            )
 
         Move ProjectHelpers.Up ->
             let
                 updatedSlides = ProjectHelpers.flipAdjacentEntries
                     slideIndex ProjectHelpers.Decrement updateSlideIndexes slides
             in
-            { model
-                | slides = updatedSlides
-                , slideIndex = slideIndex - 1
-            }
+            (
+                { model
+                    | slides = updatedSlides
+                    , slideIndex = slideIndex - 1
+                }
+                , Cmd.none
+            )
 
         Move ProjectHelpers.Down ->
             let
                 updatedSlides = ProjectHelpers.flipAdjacentEntries
                     slideIndex ProjectHelpers.Increment updateSlideIndexes slides
             in
-            { model
-                | slides = updatedSlides
-                , slideIndex = slideIndex + 1
-            }
+            (
+                { model
+                    | slides = updatedSlides
+                    , slideIndex = slideIndex + 1
+                }
+                , Cmd.none
+            )
 
         Move ProjectHelpers.Bottom ->
             let
@@ -217,10 +251,13 @@ update msg ( { slideIndex, slides } as model ) =
                 updatedSlides = ProjectHelpers.moveEntry
                     slideIndex ProjectHelpers.Decrement finalIndex updateSlideIndexes slides
             in
-            { model
-                | slides = updatedSlides
-                , slideIndex = finalIndex
-            }
+            (
+                { model
+                    | slides = updatedSlides
+                    , slideIndex = finalIndex
+                }
+                , Cmd.none
+            )
 
         SlideMsg slideMsg ->
             let
@@ -229,16 +266,19 @@ update msg ( { slideIndex, slides } as model ) =
             case maybeSlide of
                 Just slide ->
                     let
-                        updatedSlide =
+                        ( updatedSlide, commands ) =
                             Slide.update slideMsg slide
                     in
-                    { model | slides = Dict.insert slideIndex updatedSlide slides }
+                    (
+                        { model | slides = Dict.insert slideIndex updatedSlide slides }
+                        , Cmd.map SlideMsg commands
+                    )
 
                 Nothing ->
-                    model
+                    ( model, Cmd.none )
 
         UpdateCurrentSlideContents _ ->
-            model
+            ( model, Cmd.none )
 
 
 -- VIEW

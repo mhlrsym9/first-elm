@@ -19,6 +19,12 @@ type alias Model =
 init : ProjectAccess -> (Model, Cmd Msg)
 init ( { flags, kl, key, ll, pn } as initValues ) =
     let
+        projectInitParams =
+            { flags = flags
+            , knownLanguage = kl
+            , learningLanguage = ll
+            , projectName = pn
+            }
         editModel =
             Edit.init
                 { flags = flags
@@ -26,7 +32,7 @@ init ( { flags, kl, key, ll, pn } as initValues ) =
                 , key = key
                 , ll = ll
                 , pn = pn
-                , model = Api.Loading (Project.initEmptyProject flags.setupEditorName)
+                , model = Api.Loading (Project.initEmptyProject projectInitParams)
                 }
     in
     ( editModel
@@ -43,13 +49,19 @@ fetchProject { flags, kl, ll, pn } =
         kcc = LanguageHelpers.contentCodeStringFromLanguage kl
         lcc = LanguageHelpers.contentCodeStringFromLanguage ll
         url = Builder.relative [flags.candorUrl, "read", kcc, lcc, pn] []
+        projectInitParams =
+            { flags = flags
+            , knownLanguage = kl
+            , learningLanguage = ll
+            , projectName = pn
+            }
     in
     Http.task
         { method = "GET"
         , headers = []
         , url = url
         , body = Http.emptyBody
-        , resolver = stringResolver ( Api.handleJsonResponse ( Project.projectDecoder flags.setupEditorName ) )
+        , resolver = stringResolver ( Api.handleJsonResponse ( Project.projectDecoder projectInitParams ) )
         , timeout = Nothing
         }
 
