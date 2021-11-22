@@ -44,12 +44,13 @@ init ( { flags, key, pn } as initValues ) =
     ( { loadingPath = flags.loadingPath, navigationKey = key, pn = pn, status = Generating }
     , Cmd.batch
         [ (postGenerationRequest initValues)
+            |> Task.map (\{bytes} -> bytes)
             |> Task.attempt CompletedGeneration
         , Task.perform (\_ -> PassedSlowGenerationThreshold) Loading.slowThreshold
         ]
     )
 
-postGenerationRequest : Init -> Task Http.Error Bytes
+postGenerationRequest : Init -> Task Http.Error Api.BytesWithHeaders
 postGenerationRequest { flags, imageRepository, kl, ll, pn } =
     let
         kcc = LanguageHelpers.contentCodeStringFromLanguage kl

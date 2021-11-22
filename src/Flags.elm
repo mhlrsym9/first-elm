@@ -2,12 +2,14 @@ module Flags exposing (Flags, init, Model, versionString)
 
 import Json.Decode exposing (decodeValue, Decoder, Error, int, string, succeed)
 import Json.Decode.Pipeline exposing (required)
+import Random
 
 type alias Flags =
     { setupEditorName : String
     , candorUrl : String
     , loadingPath : String
     , metadata : Json.Decode.Value
+    , seeds : List Int
     }
 
 type alias DecodedMetadata =
@@ -22,6 +24,7 @@ type alias Model =
     , candorUrl : String
     , loadingPath : String
     , decodedMetadata : Result Error DecodedMetadata
+    , seeds : List Random.Seed
     }
 
 metadataDecoder : Decoder DecodedMetadata
@@ -33,11 +36,12 @@ metadataDecoder =
         |> required "buildTag" string
 
 init : Flags -> Model
-init { setupEditorName, candorUrl, loadingPath, metadata } =
+init { setupEditorName, candorUrl, loadingPath, metadata, seeds } =
     { setupEditorName = setupEditorName
     , candorUrl = candorUrl
     , loadingPath = loadingPath
     , decodedMetadata = decodeValue metadataDecoder metadata
+    , seeds = List.map Random.initialSeed seeds
     }
 
 versionString : Model -> String

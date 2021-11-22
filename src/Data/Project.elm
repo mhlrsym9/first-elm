@@ -61,7 +61,7 @@ initialSeeds =
     )
 
 projectDecoder : InitParams -> Decoder Model
-projectDecoder initParams =
+projectDecoder ( { flags } as initParams ) =
     succeed Model
         |> hardcoded initParams
         |> hardcoded 0
@@ -85,7 +85,7 @@ initEmptyProject initParams =
     initProject initParams Dict.empty initialSeeds
 
 initNewProject : InitParams -> Model
-initNewProject initParams =
+initNewProject initParams  =
     let
         seeds = initialSeeds
         (slides, updatedSeeds) = createNewSlide initParams 0 seeds

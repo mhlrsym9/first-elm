@@ -3,13 +3,14 @@ module Data.Slide exposing (encodeSlide, establishIndexes, init, InitParams, Mod
 import Api
 import Bytes exposing (Bytes)
 import Data.QuestionsArea as QuestionsArea
+import Dict exposing (Dict)
 import File exposing (File)
 import File.Select as Select
 import Flags exposing (Flags)
-import Http exposing (bytesBody, stringResolver)
-import Html exposing (button, div, Html, table, text, tr)
-import Html.Attributes exposing (attribute, class)
-import Html.Events exposing (onClick)
+import Http exposing (bytesBody, bytesResolver, stringResolver)
+import Html exposing (button, div, h2, Html, input, label, table, text, tr)
+import Html.Attributes exposing (attribute, class, disabled, type_, value)
+import Html.Events exposing (onClick, onInput)
 import Html.Keyed as Keyed
 import Json.Decode exposing (Decoder, field, list, map, string, succeed)
 import Json.Decode.Pipeline exposing (custom, hardcoded, optional, required)
@@ -17,8 +18,9 @@ import Json.Encode as Encode
 import LanguageHelpers
 import Procedure exposing (Procedure)
 import Procedure.Program
+import Random
 import Task exposing (Task)
-import UUID
+import UUID exposing (Seeds)
 import Url.Builder as Builder
 
 -- MODEL
@@ -34,9 +36,12 @@ type alias InitParams =
     }
 
 type alias SlideComponent =
-    { name : String
+    { description : String
     , id : String
     }
+
+type alias TransferResponse =
+    { id : String }
 
 type Images
     = HiddenImages (List SlideComponent)
@@ -50,11 +55,23 @@ type Videos
     = HiddenVideos (List SlideComponent)
     | VisibleVideos (List SlideComponent)
 
+type ComponentType
+    = Image
+    | Sound
+    | Video
+
+type ProcedureError
+    = HttpError Http.Error
+    | NoMimeType
+
 type alias Model =
-    { images : Images
+    { componentDescription : String
+    , componentUrl : String
+    , images : Images
     , initParams : InitParams
     , procModel : Procedure.Program.Model Msg
     , questionsArea : QuestionsArea.Model
+    , seeds : Seeds
     , slideId : String
     , slideIndex : Int
     , slideText : Text
@@ -65,8 +82,8 @@ type alias Model =
 slideComponentDecoder : Decoder SlideComponent
 slideComponentDecoder =
     succeed SlideComponent
-        |> required "name" string
-        |> optional "id" string ""
+        |> required "description" string
+        |> required "id" string
 
 slideComponentsDecoder : Decoder (List SlideComponent)
 slideComponentsDecoder =
@@ -75,6 +92,19 @@ slideComponentsDecoder =
 imagesAreaDecoder : Decoder Images
 imagesAreaDecoder =
     map HiddenImages slideComponentsDecoder
+
+initialSeeds : Flags.Model -> Seeds
+initialSeeds { seeds } =
+    case seeds of
+        ( a :: b :: c :: d :: _ ) ->
+            Seeds a b c d
+        _ ->
+            (Seeds
+                (Random.initialSeed 12345)
+                (Random.initialSeed 23456)
+                (Random.initialSeed 34567)
+                (Random.initialSeed 45678)
+            )
 
 soundsAreaDecoder : Decoder Sounds
 soundsAreaDecoder =
@@ -85,12 +115,15 @@ videosAreaDecoder =
     map HiddenVideos slideComponentsDecoder
 
 slideDecoder : InitParams -> Decoder Model
-slideDecoder initParams =
+slideDecoder ( { flags } as initParams ) =
     succeed Model
+        |> hardcoded ""
+        |> hardcoded ""
         |> optional "images" imagesAreaDecoder (HiddenImages [])
         |> hardcoded initParams
         |> hardcoded Procedure.Program.init
         |> required "questionsarea" QuestionsArea.questionsAreaDecoder
+        |> hardcoded ( initialSeeds flags )
         |> hardcoded UUID.nilString
         |> hardcoded 0
         |> custom slideTextDecoder
@@ -98,9 +131,9 @@ slideDecoder initParams =
         |> optional "videos" videosAreaDecoder (HiddenVideos [])
 
 encodeSlideComponent : SlideComponent -> Encode.Value
-encodeSlideComponent { name, id } =
+encodeSlideComponent { description, id } =
     Encode.object
-        [ ( "name", Encode.string name )
+        [ ( "description", Encode.string description )
         , ( "id", Encode.string id )
         ]
 
@@ -167,14 +200,17 @@ textToString (Text val) =
     val
 
 init : InitParams -> String -> Int -> Model
-init initParams slideId slideIndex =
+init ( { flags } as initParams ) slideId slideIndex =
     let
         questionsArea = QuestionsArea.init { slideIndex = slideIndex }
     in
-    { images = HiddenImages [ ]
+    { componentDescription = ""
+    , componentUrl = ""
+    , images = HiddenImages [ ]
     , initParams = initParams
     , procModel = Procedure.Program.init
     , questionsArea = questionsArea
+    , seeds = initialSeeds flags
     , slideId = slideId
     , slideIndex = slideIndex
     , slideText = Text "This is a test"
@@ -201,25 +237,49 @@ establishIndexes slideIndex ( { questionsArea } as model ) =
 -- UPDATE
 
 type Msg
-    = CopyUrl String
+    = ComponentDescriptionInput String
+    | ComponentUrlInput String
+    | CopyUrl String
     | ImageRequested
     | ImageTransferred (Result Http.Error SlideComponent)
+    | ImageUrlRequested
     | ProcedureMsg (Procedure.Program.Msg Msg)
     | QuestionsAreaMsg QuestionsArea.Msg
     | SoundRequested
     | SoundTransferred (Result Http.Error SlideComponent)
+    | SoundUrlRequested
     | UpdateImagesVisibility Images Sounds Videos
     | UpdateSoundsVisibility Images Sounds Videos
     | UpdateVideosVisibility Images Sounds Videos
     | VideoRequested
     | VideoTransferred (Result Http.Error SlideComponent)
+    | VideoUrlRequested
 
 storeSlideContents : String -> Model -> Model
 storeSlideContents slideContents model =
     { model | slideText = Text slideContents }
 
-transferToServer : Model -> File -> Bytes -> Task Http.Error SlideComponent
-transferToServer { initParams } f componentBytes =
+transferResponseDecoder : Decoder TransferResponse
+transferResponseDecoder =
+    succeed TransferResponse
+        |> required "name" string
+
+mimeToExt : String -> String
+mimeToExt mimeType =
+    case mimeType of
+        "image/jpg" ->
+            ".jpg"
+        "image/png" ->
+            ".png"
+        "audio/mpeg" ->
+            ".mp3"
+        "video/mp4" ->
+            ".mp4"
+        _ ->
+            ".xxx"
+
+transferToServer : Model -> String -> String -> Bytes -> Task Http.Error TransferResponse
+transferToServer { initParams } fileName fileMime componentBytes =
     let
         url = Builder.relative
             [ initParams.flags.candorUrl
@@ -227,21 +287,25 @@ transferToServer { initParams } f componentBytes =
             , LanguageHelpers.contentCodeStringFromLanguage initParams.knownLanguage
             , LanguageHelpers.contentCodeStringFromLanguage initParams.learningLanguage
             , initParams.projectName
-            , File.name f
+            , fileName ++ (mimeToExt fileMime)
             ] []
     in
     Http.task
         { method = "POST"
         , headers = []
         , url = url
-        , body = bytesBody (File.mime f) componentBytes
-        , resolver = stringResolver (Api.handleJsonResponse slideComponentDecoder)
+        , body = bytesBody fileMime componentBytes
+        , resolver = stringResolver (Api.handleJsonResponse transferResponseDecoder)
         , timeout = Nothing
         }
 
-addComponentToProject : Model -> (List String) -> ( (Result Http.Error SlideComponent) -> Msg ) -> Cmd Msg
-addComponentToProject model mimeTypes transferred =
-    Procedure.fetch (Select.file mimeTypes)
+addComponentToProject : Model -> (List String) -> ( (Result Http.Error SlideComponent) -> Msg ) -> (Model, Cmd Msg)
+addComponentToProject ( { componentDescription, seeds } as model ) mimeTypes transferred =
+    let
+        (uuid, updatedSeeds) = UUID.step seeds
+    in
+    ( { model | componentDescription = "", componentUrl = "", seeds = updatedSeeds }
+    , Procedure.fetch (Select.file mimeTypes)
         |> Procedure.andThen
             (\f ->
                 File.toBytes f
@@ -251,19 +315,82 @@ addComponentToProject model mimeTypes transferred =
             )
         |> Procedure.andThen
             (\(f, bytes) ->
-                (transferToServer model f bytes)
+                let
+                    fileMime = (File.mime f)
+                    fname = UUID.toString uuid
+                in
+                (transferToServer model fname fileMime bytes)
                     |> Procedure.fromTask
             )
+        |> Procedure.map ( \{ id } -> { description = componentDescription, id = id  } )
         |> Procedure.try ProcedureMsg transferred
+    )
+
+fetchComponent : String -> Task Http.Error Api.BytesWithHeaders
+fetchComponent componentUrl =
+    Http.task
+        { method = "GET"
+        , headers = []
+        , url = componentUrl
+        , body = Http.emptyBody
+        , resolver = bytesResolver (Api.handleBytesResponse Ok)
+        , timeout = Nothing
+        }
+
+findMimeType : Dict String String -> Maybe String
+findMimeType d =
+    let
+        c = Dict.get "Content-Type" d
+    in
+    case c of
+        Just ct ->
+            let
+                p = String.split ";" ct
+            in
+            List.head p
+        Nothing ->
+            Nothing
+
+addUrlComponentToProject : Model -> ( (Result Http.Error SlideComponent) -> Msg ) -> (Model, Cmd Msg)
+addUrlComponentToProject ( { componentDescription, componentUrl, seeds } as model ) transferred =
+    let
+        (uuid, updatedSeeds) = UUID.step seeds
+        fname = UUID.toString uuid
+    in
+    ( { model | componentDescription = "", componentUrl = "", seeds = updatedSeeds }
+    , fetchComponent componentUrl
+        |> Procedure.fromTask
+        |> Procedure.andThen
+            (\{ bytes, headers } ->
+                let
+                    mimeType = findMimeType headers
+                in
+                case mimeType of
+                    Just mt ->
+                        ( transferToServer model fname mt bytes )
+                            |> Procedure.fromTask
+                    _ ->
+                        ( transferToServer model fname "image/jpg" bytes )
+                            |> Procedure.fromTask
+            )
+        |> Procedure.map ( \{ id } -> { description = componentDescription, id = id } )
+        |> Procedure.try ProcedureMsg transferred
+    )
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg ( { images, procModel, questionsArea, sounds, videos } as model ) =
     case msg of
+        ComponentDescriptionInput s ->
+            ( { model | componentDescription = s }, Cmd.none )
+
+        ComponentUrlInput s ->
+            ( { model | componentUrl = s }, Cmd.none )
+
         CopyUrl _ ->
             ( model, Cmd.none )
 
         ImageRequested ->
-            ( model, addComponentToProject model ["image/png", "image/jpg"] ImageTransferred )
+            addComponentToProject model ["image/png", "image/jpg"] ImageTransferred
 
         ImageTransferred result ->
             case result of
@@ -278,6 +405,9 @@ update msg ( { images, procModel, questionsArea, sounds, videos } as model ) =
                 Err _ ->
                     ( model, Cmd.none )
 
+        ImageUrlRequested ->
+            addUrlComponentToProject model ImageTransferred
+
         ProcedureMsg procMsg ->
             Procedure.Program.update procMsg procModel
                 |> Tuple.mapFirst (\updated -> { model | procModel = updated })
@@ -290,7 +420,7 @@ update msg ( { images, procModel, questionsArea, sounds, videos } as model ) =
             ( { model | questionsArea = updatedQuestionsAreaModel }, Cmd.none )
 
         SoundRequested ->
-            ( model, addComponentToProject model ["audio/mpg"] ImageTransferred )
+            addComponentToProject model ["audio/mpg"] ImageTransferred
 
         SoundTransferred result ->
             case result of
@@ -304,6 +434,9 @@ update msg ( { images, procModel, questionsArea, sounds, videos } as model ) =
 
                 Err _ ->
                     ( model, Cmd.none )
+
+        SoundUrlRequested ->
+            addUrlComponentToProject model SoundTransferred
 
         UpdateImagesVisibility updatedImages updatedSounds updatedVideos ->
             (
@@ -336,7 +469,7 @@ update msg ( { images, procModel, questionsArea, sounds, videos } as model ) =
             )
 
         VideoRequested ->
-            ( model, addComponentToProject model ["video/mp4"] ImageTransferred )
+            addComponentToProject model ["video/mp4"] ImageTransferred
 
         VideoTransferred result ->
             case result of
@@ -350,6 +483,9 @@ update msg ( { images, procModel, questionsArea, sounds, videos } as model ) =
 
                 Err _ ->
                     ( model, Cmd.none )
+
+        VideoUrlRequested ->
+            addUrlComponentToProject model VideoTransferred
 
 -- VIEW
 
@@ -365,6 +501,12 @@ viewTinyMCEEditor { initParams, slideId, slideText } =
         ]
         [ text (textToString slideText) ]
     )
+
+viewSlideComponentsHeader : Html Msg
+viewSlideComponentsHeader =
+    h2
+        [ class "edit-page-slide-components-header" ]
+        [ text "Slide Components" ]
 
 viewSlideImages : Model -> Html Msg
 viewSlideImages { images, sounds, videos } =
@@ -396,7 +538,7 @@ viewSlideImages { images, sounds, videos } =
     in
     button
         [ onClick ( UpdateImagesVisibility updatedImages updatedSounds updatedVideos ) ]
-        [ text "Images" ]
+        [ text "Display Images" ]
 
 viewSlideSounds : Model -> Html Msg
 viewSlideSounds { images, sounds, videos } =
@@ -428,7 +570,7 @@ viewSlideSounds { images, sounds, videos } =
     in
     button
         [ onClick ( UpdateSoundsVisibility updatedImages updatedSounds updatedVideos ) ]
-        [ text "Sounds" ]
+        [ text "Display Sounds" ]
 
 viewSlideVideos : Model -> Html Msg
 viewSlideVideos { images, sounds, videos } =
@@ -460,29 +602,33 @@ viewSlideVideos { images, sounds, videos } =
     in
     button
         [ onClick ( UpdateVideosVisibility updatedImages updatedSounds updatedVideos ) ]
-        [ text "Videos" ]
+        [ text "Display Videos" ]
 
-viewLoadComponentFromFile : Msg -> Html Msg
-viewLoadComponentFromFile msg =
-    button
-        [ onClick msg ]
-        [ text "Select file" ]
+toBaseUrl : ComponentType -> String
+toBaseUrl t =
+    case t of
+        Image ->
+            "image"
+        Sound ->
+            "audio"
+        Video ->
+            "video"
 
-viewComponent : String -> InitParams -> SlideComponent -> List (Html Msg) -> List (Html Msg)
-viewComponent baseUrl { flags, knownLanguage, learningLanguage, projectName } { name } l =
+viewComponent : InitParams -> ComponentType -> SlideComponent -> List (Html Msg) -> List (Html Msg)
+viewComponent { flags, knownLanguage, learningLanguage, projectName } componentType { description, id } l =
     let
         url = Builder.relative
             [ flags.candorUrl
-            , baseUrl
+            , ( toBaseUrl componentType )
             , LanguageHelpers.contentCodeStringFromLanguage knownLanguage
             , LanguageHelpers.contentCodeStringFromLanguage learningLanguage
             , projectName
-            , name
+            , id
             ] []
         entry =
             tr
                 [ ]
-                [ text name
+                [ text description
                 , Html.node "clipboard-copy"
                     [ attribute "value" url
                     , class "w3-button w3-black w3-round"
@@ -492,27 +638,159 @@ viewComponent baseUrl { flags, knownLanguage, learningLanguage, projectName } { 
     in
     entry :: l
 
-viewComponents : Msg -> String -> InitParams -> List SlideComponent -> Html Msg
-viewComponents msg baseUrl initParams components =
+viewSlideComponentButtons : Model -> Html Msg
+viewSlideComponentButtons model =
     div
         [ ]
-        [ viewLoadComponentFromFile msg
-        , List.foldl (viewComponent baseUrl initParams) [ ] components
-          |> List.reverse
-          |> table [ class "edit-page-slide-components-table" ]
+        [ viewSlideImages model
+        , viewSlideSounds model
+        , viewSlideVideos model
+        ]
+
+toComponentDescription : ComponentType -> String
+toComponentDescription t =
+    let
+        header =
+            case t of
+                Image ->
+                    "Image"
+                Sound ->
+                    "Sound"
+                Video ->
+                    "Video"
+    in
+    header ++ " Description:"
+
+viewComponentDescription : Model -> ComponentType -> Html Msg
+viewComponentDescription { componentDescription } t =
+    div
+        [ ]
+        [ label
+            [ ]
+            [ text ( toComponentDescription t )
+            , input
+                [ type_ "text"
+                , value componentDescription
+                , onInput ComponentDescriptionInput
+                ]
+                [ ]
+            ]
+        ]
+
+toLoadComponentButtonText : ComponentType -> String
+toLoadComponentButtonText t =
+    let
+        s =
+            case t of
+                Image ->
+                    "image"
+                Sound ->
+                    "sound"
+                Video ->
+                    "video"
+    in
+    "Select " ++ s ++ " file"
+
+toLoadComponentButtonMsg : ComponentType -> Msg
+toLoadComponentButtonMsg t =
+    case t of
+        Image ->
+            ImageRequested
+        Sound ->
+            SoundRequested
+        Video ->
+            VideoRequested
+
+viewLoadComponentFromFile : Model -> ComponentType -> Html Msg
+viewLoadComponentFromFile { componentDescription } componentType =
+    button
+        [ disabled ( String.isEmpty componentDescription )
+        , onClick (toLoadComponentButtonMsg componentType)
+        ]
+        [ text (toLoadComponentButtonText componentType ) ]
+
+toLoadUrlComponentLabelText : ComponentType -> String
+toLoadUrlComponentLabelText t =
+    let
+        s =
+            case t of
+                Image ->
+                    "image"
+                Sound ->
+                    "sound"
+                Video ->
+                    "video"
+    in
+    "URL to " ++ s ++ ":"
+
+toLoadUrlComponentButtonText : ComponentType -> String
+toLoadUrlComponentButtonText t =
+    let
+        s =
+            case t of
+                Image ->
+                    "image"
+                Sound ->
+                    "sound"
+                Video ->
+                    "video"
+    in
+    "Transfer " ++ s ++ " to server"
+
+toLoadUrlComponentButtonMsg : ComponentType -> Msg
+toLoadUrlComponentButtonMsg t =
+    case t of
+        Image ->
+            ImageUrlRequested
+        Sound ->
+            SoundUrlRequested
+        Video ->
+            VideoUrlRequested
+
+viewLoadComponentFromUrl : Model -> ComponentType -> Html Msg
+viewLoadComponentFromUrl { componentDescription, componentUrl } componentType =
+    div
+        [ ]
+        [ label
+            [ ]
+            [ text ( toLoadUrlComponentLabelText componentType )
+            , input
+                [ type_ "text"
+                , value componentUrl
+                , onInput ComponentUrlInput
+                ]
+                [ ]
+            , button
+                [ disabled ( String.isEmpty componentDescription || String.isEmpty componentUrl )
+                , onClick ( toLoadUrlComponentButtonMsg componentType )
+                ]
+                [ text ( toLoadUrlComponentButtonText componentType) ]
+            ]
+        ]
+
+viewComponents : Model -> InitParams -> ComponentType -> List SlideComponent -> Html Msg
+viewComponents model initParams componentType components =
+    div
+        [ ]
+        [ viewComponentDescription model componentType
+        , viewLoadComponentFromFile model componentType
+        , viewLoadComponentFromUrl model componentType
+        , List.foldl (viewComponent initParams componentType) [ ] components
+            |> List.reverse
+            |> table [ class "edit-page-slide-components-table" ]
         ]
 
 viewSlideComponents : Model -> Html Msg
-viewSlideComponents { images, initParams, sounds, videos } =
+viewSlideComponents ( { images, initParams, sounds, videos } as model ) =
     case ( images, sounds, videos ) of
         ( VisibleImages vis, HiddenSounds _, HiddenVideos _ ) ->
-            viewComponents ImageRequested "image" initParams vis
+            viewComponents model initParams Image vis
 
         ( HiddenImages _, VisibleSounds vss, HiddenVideos _ ) ->
-            viewComponents SoundRequested "audio" initParams vss
+            viewComponents model initParams Sound vss
 
         ( HiddenImages _, HiddenSounds _, VisibleVideos vvs ) ->
-            viewComponents VideoRequested "video" initParams vvs
+            viewComponents model initParams Video vvs
 
         _ ->
             div [ ] [ ]
@@ -522,12 +800,8 @@ viewSlideComponentsArea ( { initParams, slideId } as model ) =
     ( "candor-slide-components" ++ slideId
     , div
         [ ]
-        [ div
-            [ ]
-            [ viewSlideImages model
-            , viewSlideSounds model
-            , viewSlideVideos model
-            ]
+        [ viewSlideComponentsHeader
+        , viewSlideComponentButtons model
         , viewSlideComponents model
         ]
     )

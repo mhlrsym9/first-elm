@@ -14,6 +14,7 @@ let app = Elm.Main.init({
         , candorUrl : process.env.ELM_APP_CANDOR_URL
         , loadingPath : loadingPath
         , metadata: metadata
+        , seeds : Array.from(crypto.getRandomValues(new Uint32Array(4)))
         }
 });
 
