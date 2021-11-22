@@ -2,7 +2,7 @@ import './main.css';
 import { Elm } from './Main.elm';
 import * as serviceWorker from './serviceWorker';
 import '@tinymce/tinymce-webcomponent';
-import {setupEditorName, extractEditorContents} from "./tinymce.js";
+import {setupEditorName, extractEditorContents, editorConfigName} from "./tinymce.js";
 import loadingPath from '../public/images/loading.svg'
 import metadata from './metadata.json';
 import '@github/clipboard-copy-element';
@@ -10,11 +10,13 @@ import '@github/clipboard-copy-element';
 let app = Elm.Main.init({
     node: document.getElementById('root'),
     flags:
-        { setupEditorName: setupEditorName()
-        , candorUrl : process.env.ELM_APP_CANDOR_URL
-        , loadingPath : loadingPath
-        , metadata: metadata
-        , seeds : Array.from(crypto.getRandomValues(new Uint32Array(4)))
+        {
+            setupEditorName: setupEditorName(),
+            editorConfigName : editorConfigName(),
+            candorUrl : process.env.ELM_APP_CANDOR_URL,
+            loadingPath : loadingPath,
+            metadata: metadata,
+            seeds : Array.from(crypto.getRandomValues(new Uint32Array(4)))
         }
 });
 

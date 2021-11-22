@@ -494,8 +494,9 @@ viewTinyMCEEditor { initParams, slideId, slideText } =
     ( "tinymce-editor-" ++ slideId
     , Html.node "tinymce-editor"
         [ attribute "api-key" "no-api-key"
+        , attribute "config" initParams.flags.editorConfigName
         , attribute "height" "500"
-        , attribute "plugins" "link image code"
+        , attribute "plugins" "link image anchor media table paste code help"
         , attribute "toolbar" "undo redo | bold italic | alignleft aligncenter alignright | code | help"
         , attribute "setup" initParams.flags.setupEditorName
         ]
@@ -786,15 +787,33 @@ viewComponent { flags, knownLanguage, learningLanguage, projectName } componentT
 
 viewComponents : Model -> InitParams -> ComponentType -> List SlideComponent -> Html Msg
 viewComponents model initParams componentType components =
+    let
+        ct =
+            case componentType of
+                Image ->
+                    "image"
+                Sound ->
+                    "sound"
+                Video ->
+                    "video"
+        d = List.foldl (viewComponent initParams componentType) [ ] components
+        t =
+            case d of
+                _ :: _ ->
+                    table
+                        [ class "edit-page-slide-components-table" ]
+                        (List.reverse d)
+
+                _ ->
+                    text ("No staged " ++ ct ++ " components")
+    in
     div
         [ ]
         [ viewComponentDescription model componentType
         , viewLoadComponentFromFile model componentType
         , viewLoadComponentFromUrl model componentType
         , viewStagedComponentsHeader componentType
-        , List.foldl (viewComponent initParams componentType) [ ] components
-            |> List.reverse
-            |> table [ class "edit-page-slide-components-table" ]
+        , t
         ]
 
 viewSlideComponents : Model -> Html Msg

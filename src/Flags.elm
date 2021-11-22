@@ -6,6 +6,7 @@ import Random
 
 type alias Flags =
     { setupEditorName : String
+    , editorConfigName : String
     , candorUrl : String
     , loadingPath : String
     , metadata : Json.Decode.Value
@@ -21,6 +22,7 @@ type alias DecodedMetadata =
 
 type alias Model =
     { setupEditorName : String
+    , editorConfigName : String
     , candorUrl : String
     , loadingPath : String
     , decodedMetadata : Result Error DecodedMetadata
@@ -36,8 +38,9 @@ metadataDecoder =
         |> required "buildTag" string
 
 init : Flags -> Model
-init { setupEditorName, candorUrl, loadingPath, metadata, seeds } =
+init { setupEditorName, editorConfigName, candorUrl, loadingPath, metadata, seeds } =
     { setupEditorName = setupEditorName
+    , editorConfigName = editorConfigName
     , candorUrl = candorUrl
     , loadingPath = loadingPath
     , decodedMetadata = decodeValue metadataDecoder metadata
