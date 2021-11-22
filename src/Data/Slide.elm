@@ -8,7 +8,7 @@ import File exposing (File)
 import File.Select as Select
 import Flags exposing (Flags)
 import Http exposing (bytesBody, bytesResolver, stringResolver)
-import Html exposing (button, div, h2, Html, input, label, table, text, tr)
+import Html exposing (button, div, h2, h3, Html, input, label, table, text, tr)
 import Html.Attributes exposing (attribute, class, disabled, type_, value)
 import Html.Events exposing (onClick, onInput)
 import Html.Keyed as Keyed
@@ -390,7 +390,7 @@ update msg ( { images, procModel, questionsArea, sounds, videos } as model ) =
             ( model, Cmd.none )
 
         ImageRequested ->
-            addComponentToProject model ["image/png", "image/jpg"] ImageTransferred
+            addComponentToProject model ["image/jpg", "image/png"] ImageTransferred
 
         ImageTransferred result ->
             case result of
@@ -538,7 +538,7 @@ viewSlideImages { images, sounds, videos } =
     in
     button
         [ onClick ( UpdateImagesVisibility updatedImages updatedSounds updatedVideos ) ]
-        [ text "Display Images" ]
+        [ text "Manage Slide Images" ]
 
 viewSlideSounds : Model -> Html Msg
 viewSlideSounds { images, sounds, videos } =
@@ -570,7 +570,7 @@ viewSlideSounds { images, sounds, videos } =
     in
     button
         [ onClick ( UpdateSoundsVisibility updatedImages updatedSounds updatedVideos ) ]
-        [ text "Display Sounds" ]
+        [ text "Manage Slide Sounds" ]
 
 viewSlideVideos : Model -> Html Msg
 viewSlideVideos { images, sounds, videos } =
@@ -602,7 +602,7 @@ viewSlideVideos { images, sounds, videos } =
     in
     button
         [ onClick ( UpdateVideosVisibility updatedImages updatedSounds updatedVideos ) ]
-        [ text "Display Videos" ]
+        [ text "Manage Slide Videos" ]
 
 toBaseUrl : ComponentType -> String
 toBaseUrl t =
@@ -613,30 +613,6 @@ toBaseUrl t =
             "audio"
         Video ->
             "video"
-
-viewComponent : InitParams -> ComponentType -> SlideComponent -> List (Html Msg) -> List (Html Msg)
-viewComponent { flags, knownLanguage, learningLanguage, projectName } componentType { description, id } l =
-    let
-        url = Builder.relative
-            [ flags.candorUrl
-            , ( toBaseUrl componentType )
-            , LanguageHelpers.contentCodeStringFromLanguage knownLanguage
-            , LanguageHelpers.contentCodeStringFromLanguage learningLanguage
-            , projectName
-            , id
-            ] []
-        entry =
-            tr
-                [ ]
-                [ text description
-                , Html.node "clipboard-copy"
-                    [ attribute "value" url
-                    , class "w3-button w3-black w3-round"
-                    ]
-                    [ text "Copy URL to clipboard" ]
-                ]
-    in
-    entry :: l
 
 viewSlideComponentButtons : Model -> Html Msg
 viewSlideComponentButtons model =
@@ -653,13 +629,13 @@ toComponentDescription t =
         header =
             case t of
                 Image ->
-                    "Image"
+                    "image"
                 Sound ->
-                    "Sound"
+                    "sound"
                 Video ->
-                    "Video"
+                    "video"
     in
-    header ++ " Description:"
+    "Description of " ++ header ++ " to stage:"
 
 viewComponentDescription : Model -> ComponentType -> Html Msg
 viewComponentDescription { componentDescription } t =
@@ -689,7 +665,7 @@ toLoadComponentButtonText t =
                 Video ->
                     "video"
     in
-    "Select " ++ s ++ " file"
+    "Select " ++ s ++ " file to stage"
 
 toLoadComponentButtonMsg : ComponentType -> Msg
 toLoadComponentButtonMsg t =
@@ -721,7 +697,7 @@ toLoadUrlComponentLabelText t =
                 Video ->
                     "video"
     in
-    "URL to " ++ s ++ ":"
+    "URL of " ++ s ++ " to stage:"
 
 toLoadUrlComponentButtonText : ComponentType -> String
 toLoadUrlComponentButtonText t =
@@ -735,7 +711,7 @@ toLoadUrlComponentButtonText t =
                 Video ->
                     "video"
     in
-    "Transfer " ++ s ++ " to server"
+    "Stage " ++ s ++ " on server"
 
 toLoadUrlComponentButtonMsg : ComponentType -> Msg
 toLoadUrlComponentButtonMsg t =
@@ -768,6 +744,46 @@ viewLoadComponentFromUrl { componentDescription, componentUrl } componentType =
             ]
         ]
 
+viewStagedComponentsHeader : ComponentType -> Html Msg
+viewStagedComponentsHeader ct =
+    let
+        s =
+            case ct of
+                Image ->
+                    "Image"
+                Sound ->
+                    "Sound"
+                Video ->
+                    "Video"
+    in
+    h3
+        [ class "edit-page-slide-staged-components-header" ]
+        [ text ("Staged " ++ s ++ " Components") ]
+
+viewComponent : InitParams -> ComponentType -> SlideComponent -> List (Html Msg) -> List (Html Msg)
+viewComponent { flags, knownLanguage, learningLanguage, projectName } componentType { description, id } l =
+    let
+        url = Builder.relative
+            [ flags.candorUrl
+            , ( toBaseUrl componentType )
+            , LanguageHelpers.contentCodeStringFromLanguage knownLanguage
+            , LanguageHelpers.contentCodeStringFromLanguage learningLanguage
+            , projectName
+            , id
+            ] []
+        entry =
+            tr
+                [ ]
+                [ text description
+                , Html.node "clipboard-copy"
+                    [ attribute "value" url
+                    , class "w3-button w3-black w3-round"
+                    ]
+                    [ text "Copy URL to clipboard" ]
+                ]
+    in
+    entry :: l
+
 viewComponents : Model -> InitParams -> ComponentType -> List SlideComponent -> Html Msg
 viewComponents model initParams componentType components =
     div
@@ -775,6 +791,7 @@ viewComponents model initParams componentType components =
         [ viewComponentDescription model componentType
         , viewLoadComponentFromFile model componentType
         , viewLoadComponentFromUrl model componentType
+        , viewStagedComponentsHeader componentType
         , List.foldl (viewComponent initParams componentType) [ ] components
             |> List.reverse
             |> table [ class "edit-page-slide-components-table" ]
