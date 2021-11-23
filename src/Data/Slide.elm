@@ -16,6 +16,7 @@ import Json.Decode exposing (Decoder, field, list, map, string, succeed)
 import Json.Decode.Pipeline exposing (custom, hardcoded, optional, required)
 import Json.Encode as Encode
 import LanguageHelpers
+import List.Extra
 import Procedure exposing (Procedure)
 import Procedure.Program
 import Random
@@ -241,18 +242,18 @@ type Msg
     | ComponentUrlInput String
     | CopyUrl String
     | ImageRequested
-    | ImageTransferred (Result Http.Error SlideComponent)
+    | ImageTransferred (Result ProcedureError SlideComponent)
     | ImageUrlRequested
     | ProcedureMsg (Procedure.Program.Msg Msg)
     | QuestionsAreaMsg QuestionsArea.Msg
     | SoundRequested
-    | SoundTransferred (Result Http.Error SlideComponent)
+    | SoundTransferred (Result ProcedureError SlideComponent)
     | SoundUrlRequested
     | UpdateImagesVisibility Images Sounds Videos
     | UpdateSoundsVisibility Images Sounds Videos
     | UpdateVideosVisibility Images Sounds Videos
     | VideoRequested
-    | VideoTransferred (Result Http.Error SlideComponent)
+    | VideoTransferred (Result ProcedureError SlideComponent)
     | VideoUrlRequested
 
 storeSlideContents : String -> Model -> Model
@@ -262,12 +263,26 @@ storeSlideContents slideContents model =
 transferResponseDecoder : Decoder TransferResponse
 transferResponseDecoder =
     succeed TransferResponse
-        |> required "name" string
+        |> required "id" string
+
+mimeToRestCall : String -> String
+mimeToRestCall mimeType =
+    case mimeType of
+        "image/jpeg" ->
+            "image"
+        "image/png" ->
+            "image"
+        "audio/mpeg" ->
+            "audio"
+        "video/mp4" ->
+            "video"
+        _ ->
+            ".xxx"
 
 mimeToExt : String -> String
 mimeToExt mimeType =
     case mimeType of
-        "image/jpg" ->
+        "image/jpeg" ->
             ".jpg"
         "image/png" ->
             ".png"
@@ -283,7 +298,7 @@ transferToServer { initParams } fileName fileMime componentBytes =
     let
         url = Builder.relative
             [ initParams.flags.candorUrl
-            , "image"
+            , (mimeToRestCall fileMime)
             , LanguageHelpers.contentCodeStringFromLanguage initParams.knownLanguage
             , LanguageHelpers.contentCodeStringFromLanguage initParams.learningLanguage
             , initParams.projectName
@@ -299,7 +314,7 @@ transferToServer { initParams } fileName fileMime componentBytes =
         , timeout = Nothing
         }
 
-addComponentToProject : Model -> (List String) -> ( (Result Http.Error SlideComponent) -> Msg ) -> (Model, Cmd Msg)
+addComponentToProject : Model -> (List String) -> ( (Result ProcedureError SlideComponent) -> Msg ) -> (Model, Cmd Msg)
 addComponentToProject ( { componentDescription, seeds } as model ) mimeTypes transferred =
     let
         (uuid, updatedSeeds) = UUID.step seeds
@@ -323,6 +338,7 @@ addComponentToProject ( { componentDescription, seeds } as model ) mimeTypes tra
                     |> Procedure.fromTask
             )
         |> Procedure.map ( \{ id } -> { description = componentDescription, id = id  } )
+        |> Procedure.mapError (\err -> HttpError err)
         |> Procedure.try ProcedureMsg transferred
     )
 
@@ -337,6 +353,15 @@ fetchComponent componentUrl =
         , timeout = Nothing
         }
 
+findValidMimeType : List String -> Maybe String
+findValidMimeType ls =
+    case ls of
+        s :: _ ->
+            List.Extra.find (\el -> el == s) ["image/jpeg" , "image/png", "audio/mpg", "video/mp4"]
+
+        _ ->
+            Nothing
+
 findMimeType : Dict String String -> Maybe String
 findMimeType d =
     let
@@ -347,11 +372,12 @@ findMimeType d =
             let
                 p = String.split ";" ct
             in
-            List.head p
+            findValidMimeType p
+
         Nothing ->
             Nothing
 
-addUrlComponentToProject : Model -> ( (Result Http.Error SlideComponent) -> Msg ) -> (Model, Cmd Msg)
+addUrlComponentToProject : Model -> ( (Result ProcedureError SlideComponent) -> Msg ) -> (Model, Cmd Msg)
 addUrlComponentToProject ( { componentDescription, componentUrl, seeds } as model ) transferred =
     let
         (uuid, updatedSeeds) = UUID.step seeds
@@ -360,6 +386,7 @@ addUrlComponentToProject ( { componentDescription, componentUrl, seeds } as mode
     ( { model | componentDescription = "", componentUrl = "", seeds = updatedSeeds }
     , fetchComponent componentUrl
         |> Procedure.fromTask
+        |> Procedure.mapError (\err -> HttpError err)
         |> Procedure.andThen
             (\{ bytes, headers } ->
                 let
@@ -367,11 +394,15 @@ addUrlComponentToProject ( { componentDescription, componentUrl, seeds } as mode
                 in
                 case mimeType of
                     Just mt ->
-                        ( transferToServer model fname mt bytes )
-                            |> Procedure.fromTask
+                        Procedure.provide (bytes, mt)
                     _ ->
-                        ( transferToServer model fname "image/jpg" bytes )
-                            |> Procedure.fromTask
+                        Procedure.break NoMimeType
+            )
+        |> Procedure.andThen
+            (\(bytes, mt) ->
+                (transferToServer model fname mt bytes)
+                    |> Procedure.fromTask
+                    |> Procedure.mapError (\err -> HttpError err)
             )
         |> Procedure.map ( \{ id } -> { description = componentDescription, id = id } )
         |> Procedure.try ProcedureMsg transferred
@@ -390,7 +421,7 @@ update msg ( { images, procModel, questionsArea, sounds, videos } as model ) =
             ( model, Cmd.none )
 
         ImageRequested ->
-            addComponentToProject model ["image/jpg", "image/png"] ImageTransferred
+            addComponentToProject model ["image/jpeg", "image/png"] ImageTransferred
 
         ImageTransferred result ->
             case result of
@@ -420,7 +451,7 @@ update msg ( { images, procModel, questionsArea, sounds, videos } as model ) =
             ( { model | questionsArea = updatedQuestionsAreaModel }, Cmd.none )
 
         SoundRequested ->
-            addComponentToProject model ["audio/mpg"] ImageTransferred
+            addComponentToProject model ["audio/mpg"] SoundTransferred
 
         SoundTransferred result ->
             case result of
@@ -469,7 +500,7 @@ update msg ( { images, procModel, questionsArea, sounds, videos } as model ) =
             )
 
         VideoRequested ->
-            addComponentToProject model ["video/mp4"] ImageTransferred
+            addComponentToProject model ["video/mp4"] SoundTransferred
 
         VideoTransferred result ->
             case result of
