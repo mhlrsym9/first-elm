@@ -528,7 +528,7 @@ viewTinyMCEEditor { initParams, slideId, slideText } =
         , attribute "config" initParams.flags.editorConfigName
         , attribute "height" "500"
         , attribute "plugins" "link image anchor media table paste code help"
-        , attribute "toolbar" "undo redo | bold italic | alignleft aligncenter alignright | code | help"
+        , attribute "toolbar" "undo redo | bold italic underline | forecolor backcolor | alignleft aligncenter alignright | fontselect fontsizeselect | code | help"
         , attribute "setup" initParams.flags.setupEditorName
         ]
         [ text (textToString slideText) ]
