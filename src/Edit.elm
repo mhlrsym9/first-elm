@@ -183,6 +183,17 @@ update msg ( { knownLanguage, learningLanguage, projectName, project, flags } as
 
         ProjectMsg projectMsg ->
             case projectMsg of
+                Project.MakeDirty ->
+                    case project of
+                        Clean p ->
+                            ( { model | project = Dirty p }
+                            , Cmd.none
+                            )
+
+-- If already Dirty, no need to dirty it up again.
+                        _ ->
+                            ( model, Cmd.none )
+
                 Project.UpdateCurrentSlideContents nextMsg ->
                     (model, Task.perform (always (UpdateCurrentSlideContents (ProjectMsg nextMsg) ) ) (Task.succeed ()))
 
@@ -193,7 +204,7 @@ update msg ( { knownLanguage, learningLanguage, projectName, project, flags } as
                                 ( updatedProjectModel, updatedCommands ) =
                                     Project.update projectMsg projectModel
                             in
-                            ( { model | project = Dirty (Api.Loaded updatedProjectModel) }
+                            ( { model | project = Clean (Api.Loaded updatedProjectModel) }
                             , Cmd.map ProjectMsg updatedCommands
                             )
 

@@ -14,6 +14,7 @@ import Json.Decode.Pipeline exposing (hardcoded, required)
 import Json.Encode as Encode
 import LanguageHelpers
 import Random
+import Task exposing (Task)
 import UUID exposing (Seeds)
 
 type alias SlideDict =
@@ -125,6 +126,7 @@ type Msg =
     DeleteSlide
     | DisplaySlide Int
     | InsertSlide ProjectHelpers.Direction
+    | MakeDirty
     | Move ProjectHelpers.Direction
     | SlideMsg Slide.Msg
     | UpdateCurrentSlideContents Msg
@@ -173,6 +175,10 @@ storeSlideContents slideContents ( { slideIndex, slides } as projectModel ) =
         Nothing ->
             projectModel
 
+makeProjectDirty : Cmd Msg
+makeProjectDirty =
+    Task.perform ( always MakeDirty ) ( Task.succeed () )
+
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg ( { slideIndex, slides } as model ) =
     case msg of
@@ -188,23 +194,27 @@ update msg ( { slideIndex, slides } as model ) =
                 { model | slides = ProjectHelpers.deleteEntry slideIndex updateSlideIndexes slides
                         , slideIndex = updatedSlideIndex
                 }
-                , Cmd.none
+                , makeProjectDirty
             )
 
         DisplaySlide updatedSlideIndex ->
             ( { model | slideIndex = updatedSlideIndex }, Cmd.none )
 
         InsertSlide ProjectHelpers.Top ->
-            ( insertSlideAtSlicePoint 0 model, Cmd.none )
+            ( insertSlideAtSlicePoint 0 model, makeProjectDirty )
 
         InsertSlide ProjectHelpers.Up ->
-            ( insertSlideAtSlicePoint slideIndex model, Cmd.none )
+            ( insertSlideAtSlicePoint slideIndex model, makeProjectDirty )
 
         InsertSlide ProjectHelpers.Down ->
-            ( insertSlideAtSlicePoint (slideIndex + 1) model, Cmd.none )
+            ( insertSlideAtSlicePoint (slideIndex + 1) model, makeProjectDirty )
 
         InsertSlide ProjectHelpers.Bottom ->
-            ( insertSlideAtSlicePoint (Dict.size slides) model, Cmd.none )
+            ( insertSlideAtSlicePoint (Dict.size slides) model, makeProjectDirty )
+
+-- Handled by Edit module
+        MakeDirty ->
+            ( model, Cmd.none )
 
         Move ProjectHelpers.Top ->
             let
@@ -216,7 +226,7 @@ update msg ( { slideIndex, slides } as model ) =
                     | slides = updatedSlides
                     , slideIndex = 0
                 }
-                , Cmd.none
+                , makeProjectDirty
             )
 
         Move ProjectHelpers.Up ->
@@ -229,7 +239,7 @@ update msg ( { slideIndex, slides } as model ) =
                     | slides = updatedSlides
                     , slideIndex = slideIndex - 1
                 }
-                , Cmd.none
+                , makeProjectDirty
             )
 
         Move ProjectHelpers.Down ->
@@ -242,7 +252,7 @@ update msg ( { slideIndex, slides } as model ) =
                     | slides = updatedSlides
                     , slideIndex = slideIndex + 1
                 }
-                , Cmd.none
+                , makeProjectDirty
             )
 
         Move ProjectHelpers.Bottom ->
@@ -256,30 +266,34 @@ update msg ( { slideIndex, slides } as model ) =
                     | slides = updatedSlides
                     , slideIndex = finalIndex
                 }
-                , Cmd.none
+                , makeProjectDirty
             )
 
         SlideMsg slideMsg ->
-            let
-                maybeSlide = Dict.get slideIndex slides
-            in
-            case maybeSlide of
-                Just slide ->
-                    let
-                        ( updatedSlide, commands ) =
-                            Slide.update slideMsg slide
-                    in
-                    (
-                        { model | slides = Dict.insert slideIndex updatedSlide slides }
-                        , Cmd.map SlideMsg commands
-                    )
+            case slideMsg of
+                Slide.MakeDirty ->
+                    ( model, makeProjectDirty )
 
-                Nothing ->
-                    ( model, Cmd.none )
+                _ ->
+                    let
+                        maybeSlide = Dict.get slideIndex slides
+                    in
+                    case maybeSlide of
+                        Just slide ->
+                            let
+                                ( updatedSlide, commands ) =
+                                    Slide.update slideMsg slide
+                            in
+                            (
+                                { model | slides = Dict.insert slideIndex updatedSlide slides }
+                                , Cmd.map SlideMsg commands
+                            )
+
+                        Nothing ->
+                            ( model, Cmd.none )
 
         UpdateCurrentSlideContents _ ->
             ( model, Cmd.none )
-
 
 -- VIEW
 

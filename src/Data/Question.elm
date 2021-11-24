@@ -7,6 +7,7 @@ import Html.Events exposing (onClick, onInput)
 import Json.Decode exposing (Decoder, field, map, string, succeed)
 import Json.Decode.Pipeline exposing (custom, hardcoded)
 import Json.Encode as Encode
+import Task exposing (Task)
 
 -- MODEL
 
@@ -130,31 +131,51 @@ establishIndexes slideIndex questionIndex model =
 
 -- UPDATE
 
-type Msg =
-    Update String
+type Msg
+    = AnswersAreaMsg AnswersArea.Msg
+    | MakeDirty
+    | Update String
     | UpdateVisibility Visibility
-    | AnswersAreaMsg AnswersArea.Msg
 
-update : Msg -> Model -> Model
+makeProjectDirty : Cmd Msg
+makeProjectDirty =
+    Task.perform ( always MakeDirty ) ( Task.succeed () )
+
+update : Msg -> Model -> (Model, Cmd Msg)
 update msg ( { questionIndex, answersArea } as model ) =
     case msg of
+        AnswersAreaMsg answersAreaMsg ->
+            case answersAreaMsg of
+                AnswersArea.MakeDirty ->
+                    ( model, makeProjectDirty )
+
+                _ ->
+                    case answersArea of
+                        Hidden _ ->
+                            ( model, Cmd.none )
+
+                        Visible m ->
+                            let
+                                (updatedAnswersAreaModel, commands) =
+                                    AnswersArea.update answersAreaMsg m
+                            in
+                            ( { model | answersArea = Visible updatedAnswersAreaModel }
+                            , Cmd.map AnswersAreaMsg commands
+                            )
+
+-- Handled in QuestionsArea module
+        MakeDirty ->
+            ( model, Cmd.none )
+
         Update s ->
-            { model | questionText = Text s }
+            ( { model | questionText = Text s }
+            , makeProjectDirty
+            )
 
         UpdateVisibility updatedAnswersArea ->
-            { model | answersArea = updatedAnswersArea }
-
-        AnswersAreaMsg answersAreaMsg ->
-            case answersArea of
-                Hidden _ ->
-                    model
-
-                Visible m ->
-                    let
-                        updatedAnswersAreaModel =
-                            AnswersArea.update answersAreaMsg m
-                    in
-                    { model | answersArea = Visible updatedAnswersAreaModel }
+            ( { model | answersArea = updatedAnswersArea }
+            , Cmd.none
+            )
 
 -- VIEW
 

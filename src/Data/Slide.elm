@@ -1,4 +1,4 @@
-module Data.Slide exposing (encodeSlide, establishIndexes, init, InitParams, Model, Msg, slideDecoder, storeSlideContents, textToString, update, updateSlideIndex, view)
+module Data.Slide exposing (encodeSlide, establishIndexes, init, InitParams, Model, Msg(..), slideDecoder, storeSlideContents, textToString, update, updateSlideIndex, view)
 
 import Api
 import Bytes exposing (Bytes)
@@ -244,6 +244,7 @@ type Msg
     | ImageRequested
     | ImageTransferred (Result ProcedureError SlideComponent)
     | ImageUrlRequested
+    | MakeDirty
     | ProcedureMsg (Procedure.Program.Msg Msg)
     | QuestionsAreaMsg QuestionsArea.Msg
     | SoundRequested
@@ -408,6 +409,10 @@ addUrlComponentToProject ( { componentDescription, componentUrl, seeds } as mode
         |> Procedure.try ProcedureMsg transferred
     )
 
+makeProjectDirty : Cmd Msg
+makeProjectDirty =
+    Task.perform ( always MakeDirty ) ( Task.succeed () )
+
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg ( { images, procModel, questionsArea, sounds, videos } as model ) =
     case msg of
@@ -428,7 +433,9 @@ update msg ( { images, procModel, questionsArea, sounds, videos } as model ) =
                 Ok image ->
                     case images of
                         VisibleImages l ->
-                            ( { model | images = VisibleImages ( image :: l ) }, Cmd.none )
+                            ( { model | images = VisibleImages ( image :: l ) }
+                            , makeProjectDirty
+                            )
 
                         _ ->
                             ( model, Cmd.none )
@@ -439,16 +446,27 @@ update msg ( { images, procModel, questionsArea, sounds, videos } as model ) =
         ImageUrlRequested ->
             addUrlComponentToProject model ImageTransferred
 
+-- Handled in Project module
+        MakeDirty ->
+            ( model, Cmd.none )
+
         ProcedureMsg procMsg ->
             Procedure.Program.update procMsg procModel
                 |> Tuple.mapFirst (\updated -> { model | procModel = updated })
 
         QuestionsAreaMsg questionsAreaMsg ->
-            let
-                updatedQuestionsAreaModel =
-                    QuestionsArea.update questionsAreaMsg questionsArea
-            in
-            ( { model | questionsArea = updatedQuestionsAreaModel }, Cmd.none )
+            case questionsAreaMsg of
+                QuestionsArea.MakeDirty ->
+                    ( model, makeProjectDirty )
+
+                _ ->
+                    let
+                        ( updatedQuestionsAreaModel, commands ) =
+                            QuestionsArea.update questionsAreaMsg questionsArea
+                    in
+                    ( { model | questionsArea = updatedQuestionsAreaModel }
+                    , Cmd.map QuestionsAreaMsg commands
+                    )
 
         SoundRequested ->
             addComponentToProject model ["audio/mpg"] SoundTransferred
@@ -458,7 +476,7 @@ update msg ( { images, procModel, questionsArea, sounds, videos } as model ) =
                 Ok sound ->
                     case sounds of
                         VisibleSounds l ->
-                            ( { model | sounds = VisibleSounds ( sound :: l ) }, Cmd.none )
+                            ( { model | sounds = VisibleSounds ( sound :: l ) }, makeProjectDirty )
 
                         _ ->
                             ( model, Cmd.none )
@@ -507,7 +525,7 @@ update msg ( { images, procModel, questionsArea, sounds, videos } as model ) =
                 Ok video ->
                     case videos of
                         VisibleVideos l ->
-                            ( { model | videos = VisibleVideos ( video :: l ) }, Cmd.none )
+                            ( { model | videos = VisibleVideos ( video :: l ) }, makeProjectDirty )
 
                         _ ->
                             ( model, Cmd.none )

@@ -1,4 +1,4 @@
-module Data.QuestionsArea exposing (encodeQuestionsArea, establishIndexes, init, Model, Msg, questionsAreaDecoder, update, updateSlideIndexes, view)
+module Data.QuestionsArea exposing (encodeQuestionsArea, establishIndexes, init, Model, Msg(..), questionsAreaDecoder, update, updateSlideIndexes, view)
 
 import Data.ProjectHelpers as ProjectHelpers
 import Data.Question as Question
@@ -10,6 +10,7 @@ import Json.Decode exposing (Decoder, int, succeed)
 import Json.Decode.Extra exposing (indexedList)
 import Json.Decode.Pipeline exposing (hardcoded, required)
 import Json.Encode as Encode
+import Task exposing (Task)
 
 type alias Model =
     { questionIndex : Int
@@ -76,27 +77,35 @@ establishIndexes slideIndex ( { questions } as model ) =
 type Msg =
     Add
     | Delete Int
+    | MakeDirty
     | Move Int ProjectHelpers.Direction
     | QuestionMsg Int Question.Msg
 
-updateQuestion : Int -> Question.Msg -> Model -> Model
+updateQuestion : Int -> Question.Msg -> Model -> (Model, Cmd Msg)
 updateQuestion index questionMsg ( { questions } as model ) =
     let
         maybeQuestion = Dict.get index questions
-        updatedModel =
+        (updatedModel, commands) =
             case maybeQuestion of
                 Just question ->
                     let
-                        updatedQuestion = Question.update questionMsg question
+                        (updatedQuestion, questionCommands)
+                            = Question.update questionMsg question
                     in
-                    { model | questions = Dict.insert index updatedQuestion questions }
+                    ( { model | questions = Dict.insert index updatedQuestion questions }
+                    , questionCommands
+                    )
 
                 Nothing ->
-                    model
+                    ( model, Cmd.none )
     in
-    updatedModel
+    ( updatedModel, Cmd.map (QuestionMsg index) commands )
 
-update : Msg -> Model -> Model
+makeProjectDirty : Cmd Msg
+makeProjectDirty =
+    Task.perform ( always MakeDirty ) ( Task.succeed () )
+
+update : Msg -> Model -> (Model, Cmd Msg)
 update msg ( { slideIndex, questions } as model ) =
     case msg of
         Add ->
@@ -105,13 +114,16 @@ update msg ( { slideIndex, questions } as model ) =
                 questionModel = Question.init { questionIndex = position, slideIndex = slideIndex }
                 updatedModel = { model | questions = Dict.insert (Dict.size questions) questionModel questions }
             in
-            updatedModel
+            ( updatedModel, makeProjectDirty )
 
         Delete index ->
-            { model | questions = ProjectHelpers.deleteEntry index updateQuestionIndexes questions }
+            ( { model | questions = ProjectHelpers.deleteEntry index updateQuestionIndexes questions }
+            , makeProjectDirty
+            )
 
-        QuestionMsg index questionMsg ->
-            updateQuestion index questionMsg model
+-- Handled in Slide module
+        MakeDirty ->
+            ( model, Cmd.none )
 
         Move index ProjectHelpers.Top ->
             let
@@ -119,21 +131,27 @@ update msg ( { slideIndex, questions } as model ) =
                     index ProjectHelpers.Increment 0
                     updateQuestionIndexes questions
             in
-            { model | questions = updatedQuestions }
+            ( { model | questions = updatedQuestions }
+            , makeProjectDirty
+            )
 
         Move index ProjectHelpers.Up ->
             let
                 updatedQuestions = ProjectHelpers.flipAdjacentEntries
                     index ProjectHelpers.Decrement updateQuestionIndexes questions
             in
-            { model | questions = updatedQuestions }
+            ( { model | questions = updatedQuestions }
+            , makeProjectDirty
+            )
 
         Move index ProjectHelpers.Down ->
             let
                 updatedQuestions = ProjectHelpers.flipAdjacentEntries
                     index ProjectHelpers.Increment updateQuestionIndexes questions
             in
-            { model | questions = updatedQuestions }
+            ( { model | questions = updatedQuestions }
+            , makeProjectDirty
+            )
 
         Move index ProjectHelpers.Bottom ->
             let
@@ -142,7 +160,17 @@ update msg ( { slideIndex, questions } as model ) =
                     index ProjectHelpers.Decrement finalIndex
                     updateQuestionIndexes questions
             in
-            { model | questions = updatedQuestions }
+            ( { model | questions = updatedQuestions }
+            , makeProjectDirty
+            )
+
+        QuestionMsg index questionMsg ->
+            case questionMsg of
+                Question.MakeDirty ->
+                    ( model, makeProjectDirty )
+
+                _ ->
+                    updateQuestion index questionMsg model
 
 -- VIEW
 
