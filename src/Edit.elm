@@ -3,6 +3,8 @@ module Edit exposing (encodeProject, getProjectModel, Model, Modified(..), Msg(.
 import Api
 import Browser.Navigation as Navigation
 import Data.Project as Project
+import Dialog
+import Element exposing (Element, html, inFront, padding)
 import Flags exposing (Flags)
 import Html exposing (Html, button, div, h1, text)
 import Html.Attributes exposing (class, disabled)
@@ -30,6 +32,7 @@ type alias Model =
     , navigationKey : Navigation.Key
     , project : Modified (Api.Status Project.Model)
     , projectName : String
+    , showHomeScreenSaveWarning : Bool
     }
 
 type alias SaveResult =
@@ -52,6 +55,7 @@ init { key, kl, ll, pn, model, flags } =
     , navigationKey = key
     , project = Clean model
     , projectName = pn
+    , showHomeScreenSaveWarning = False
     }
 
 getProjectModel : Model -> Maybe Project.Model
@@ -75,6 +79,7 @@ getProjectModel model =
 
 type Msg
     = Cancel
+    | CloseDialog
     | CompletedProjectSave (Result Http.Error SaveResult)
     | PassedSlowSaveThreshold
     | ProjectMsg Project.Msg
@@ -148,11 +153,31 @@ storeSlideContents slideContents ( { project } as model ) =
         _ ->
             model
 
+pushCancel : Model -> Cmd Msg
+pushCancel model =
+    Navigation.pushUrl model.navigationKey (Routes.routeToUrl Routes.Home)
+
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg ( { knownLanguage, learningLanguage, projectName, project, flags } as model ) =
     case msg of
         Cancel ->
-            ( model, Navigation.pushUrl model.navigationKey (Routes.routeToUrl Routes.Home) )
+{-
+            case project of
+                Dirty p ->
+                    ( { model | showHomeScreenSaveWarning = True } , Cmd.none )
+
+                Clean p ->
+                    ( model, pushCancel model )
+-}
+            ( model, pushCancel model )
+
+        CloseDialog ->
+            {-
+            ( { model | showHomeScreenSaveWarning = False }
+            , pushCancel model
+            )
+            -}
+            ( model, Cmd.none )
 
         CompletedProjectSave result ->
             case result of
@@ -290,13 +315,55 @@ viewActionButtons model =
         , viewCancelButton
         ]
 
-loadedView : Model -> Project.Model -> List (Html Msg)
-loadedView model projectModel =
+{-
+loadedMainView : Model -> Project.Model -> Element Msg
+loadedMainView model projectModel =
+    html
+        ( div
+            [ ]
+            [ viewEditPageInfo model
+            , viewActionButtons model
+            , Project.view projectModel
+                |> Html.map ProjectMsg
+            ])
+-}
+
+loadedMainView : Model -> Project.Model -> List (Html Msg)
+loadedMainView model projectModel =
     [ viewEditPageInfo model
     , viewActionButtons model
     , Project.view projectModel
         |> Html.map ProjectMsg
     ]
+
+loadedView : Model -> Project.Model -> List (Html Msg)
+loadedView model projectModel =
+{-
+    let
+        config =
+            { closeMessage = Just CloseDialog
+            , maskAttributes = []
+            , containerAttributes = [ padding 10 ]
+            , headerAttributes = []
+            , bodyAttributes = []
+            , footerAttributes = []
+            , header = Just (Element.text "Hello world")
+            , body = Nothing
+            , footer = Nothing
+            }
+        dialogConfig =
+            if (model.showHomeScreenSaveWarning) then
+                Just config
+            else
+                Nothing
+    in
+    [
+        Element.layout
+            [inFront (Dialog.view dialogConfig)]
+            (loadedMainView model projectModel)
+    ]
+-}
+    loadedMainView model projectModel
 
 errorView : Model -> String -> List (Html Msg)
 errorView { projectName } errorStr =
@@ -342,5 +409,5 @@ view ( {  project, projectName, flags } as model ) =
                     List.concat [(loadingSlowlyView model), (loadedView model projectModel)]
     in
     div
-        [ class "edit-page "]
+        [ class "edit-page" ]
         elements

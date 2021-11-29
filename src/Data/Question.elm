@@ -1,6 +1,7 @@
 module Data.Question exposing (encodeQuestion, establishIndexes, init, Model, Msg(..), questionDecoder, update, updateQuestionIndex, updateSlideIndex, view)
 
 import Data.AnswersArea as AnswersArea
+import Element exposing (el, layout)
 import Html exposing (Html, button, div, input, text)
 import Html.Attributes exposing (class, type_, value)
 import Html.Events exposing (onClick, onInput)
@@ -209,6 +210,7 @@ viewAnswers ( { questionIndex, answersArea } ) =
 
         Visible m ->
             AnswersArea.view m
+                |> layout [ ]
                 |> Html.map AnswersAreaMsg
 
 view : Model -> Html Msg

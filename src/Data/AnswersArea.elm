@@ -2,9 +2,11 @@ module Data.AnswersArea exposing (answersAreaDecoder, encodeAnswersArea, establi
 
 import Data.ProjectHelpers as ProjectHelpers
 import Dict exposing (Dict)
-import Html exposing (Html, button, div, h3, input, label, table, text, tr)
-import Html.Attributes exposing (checked, class, disabled, for, id, name, type_, value)
-import Html.Events exposing (onClick, onInput)
+import Element exposing (Attribute, centerX, centerY, column, Element, el, fill, IndexedColumn, padding, paragraph, rgb255, shrink, spacing)
+import Element.Background as Background
+import Element.Border as Border
+import Element.Font as Font
+import Element.Input as Input
 import Json.Decode exposing (Decoder, field, map, string, succeed)
 import Json.Decode.Extra exposing (indexedList)
 import Json.Decode.Pipeline exposing (custom, hardcoded, required)
@@ -161,6 +163,7 @@ establishIndexes slideIndex questionIndex ( { optRadio, answers } as model ) =
 type Msg =
     Add
     | Delete Int
+    | IsCorrectAnswer OptRadio Bool
     | MakeDirty
     | Move Int ProjectHelpers.Direction
     | Update Int String
@@ -270,6 +273,11 @@ update msg ( { slideIndex, questionIndex, answers } as model ) =
                 , makeProjectDirty
             )
 
+        IsCorrectAnswer optRadio _ ->
+            ( { model | optRadio = optRadio }
+            , makeProjectDirty
+            )
+
 -- Handled by Question module
         MakeDirty ->
             ( model, Cmd.none )
@@ -334,113 +342,183 @@ update msg ( { slideIndex, questionIndex, answers } as model ) =
 
 -- VIEW
 
-viewHeader : Html Msg
+viewHeader : Element Msg
 viewHeader =
-    h3
-        [ class "edit-page-answers-header" ]
-        [ text "Answers" ]
+    el
+        [ Font.size 24
+        , centerX
+        ]
+        (Element.text "Answers")
 
-viewActionButtons : Html Msg
+viewActionButtons : Element Msg
 viewActionButtons =
-    button
-        [ class "edit-page-answers-action-buttons"
-        , onClick Add
-        ]
-        [ text "Add Another Answer" ]
+    Input.button
+        [ centerX ]
+        { onPress = Just Add
+        , label = Element.text "Add Another Answer"
+        }
 
-viewMoveAnswerTopButton : Int -> Html Msg
+lightGrey : Element.Color
+lightGrey =
+    rgb255 211 211 211
+
+black : Element.Color
+black =
+    rgb255 0 0 0
+
+green : Element.Color
+green =
+    rgb255 0 128 0
+
+buttonAttributes : List (Attribute Msg)
+buttonAttributes =
+    [ centerY
+    , padding 5
+    , Background.color lightGrey
+    , Border.rounded 3
+    , Border.color black
+    , Border.width 1
+    ]
+
+viewMoveAnswerTopButton : Int -> Element Msg
 viewMoveAnswerTopButton index =
-    button
-        [ onClick (Move index ProjectHelpers.Top)
-        , disabled (0 == index)
-        ]
-        [ text "Move Answer to Top" ]
+    if (0 == index) then
+        Element.none
+    else
+        Input.button
+            buttonAttributes
+            { onPress = Just (Move index ProjectHelpers.Top)
+            , label = Element.text "Move Answer to Top"
+            }
 
-viewMoveAnswerUpButton : Int -> Html Msg
+viewMoveAnswerUpButton : Int -> Element Msg
 viewMoveAnswerUpButton index =
-    button
-        [ onClick (Move index ProjectHelpers.Up)
-        , disabled (0 == index)
-        ]
-        [ text "Move Answer Up" ]
+    if (0 == index) then
+        Element.none
+    else
+        Input.button
+            buttonAttributes
+            { onPress = Just (Move index ProjectHelpers.Up)
+            , label = Element.text "Move Answer Up"
+            }
 
-viewMoveAnswerDownButton : Int -> Int -> Html Msg
-viewMoveAnswerDownButton index numberAnswers =
-    button
-        [ onClick (Move index ProjectHelpers.Down)
-        , disabled ( index == (numberAnswers - 1) )
-        ]
-        [ text "Move Answer Down" ]
+viewMoveAnswerDownButton : Int -> Int -> Element Msg
+viewMoveAnswerDownButton numberAnswers index =
+    if ((numberAnswers - 1) == index) then
+        Element.none
+    else
+        Input.button
+            buttonAttributes
+            { onPress = Just (Move index ProjectHelpers.Down)
+            , label = Element.text "Move Answer Down"
+            }
 
-viewMoveAnswerBottomButton : Int -> Int -> Html Msg
-viewMoveAnswerBottomButton index numberAnswers =
-    button
-        [ onClick (Move index ProjectHelpers.Bottom)
-        , disabled ( index == (numberAnswers - 1) )
-        ]
-        [ text "Move Answer to Bottom" ]
+viewMoveAnswerBottomButton : Int -> Int -> Element Msg
+viewMoveAnswerBottomButton numberAnswers index =
+    if ((numberAnswers - 1) == index) then
+        Element.none
+    else
+        Input.button
+            buttonAttributes
+            { onPress = Just (Move index ProjectHelpers.Bottom)
+            , label = Element.text "Move Answer to Bottom"
+            }
 
-viewDeleteButton : Int -> Int -> Html Msg
-viewDeleteButton index numberAnswers =
-    button
-        [ onClick (Delete index)
-        , disabled ( 1 == numberAnswers )
-        ]
-        [ text "Delete This Answer" ]
+viewDeleteButton : Int -> Int -> Element Msg
+viewDeleteButton numberAnswers index =
+    if (1 == numberAnswers) then
+        Element.none
+    else
+        Input.button
+            buttonAttributes
+            { onPress = Just (Delete index)
+            , label = Element.text "Delete This Answer"
+            }
 
-viewIsCorrectRadioButton : Model -> Int -> Html Msg
-viewIsCorrectRadioButton ( { optRadio } as model ) answerIndex =
+viewIsCorrectCheckbox : Model -> Int -> Element Msg
+viewIsCorrectCheckbox ( { optRadio } as model ) answerIndex =
     let
-        nameValue = getCandorAnswerHeader model
-        idValue = getCandorAnswer model answerIndex
+        idValue = OptRadio (getCandorAnswer model answerIndex)
     in
-    label
-        [ for idValue ]
-        [
-            input
-                [ type_ "radio"
-                , id idValue
-                , name nameValue
-                , value idValue
-                , checked (optRadio == (OptRadio idValue))
-                ]
+    if (optRadio == idValue) then
+        paragraph
+            [ centerX
+            , centerY
+            , Font.color green
+            ]
+            [ Element.text "Correct Answer" ]
+    else
+    Input.checkbox
+        [ centerY ]
+        { onChange = IsCorrectAnswer idValue
+        , icon = Input.defaultCheckbox
+        , checked = False
+        , label =
+            Input.labelRight
                 [ ]
-            , text "is Correct?"
-        ]
+                (Element.text "Is Correct?")
+        }
 
-viewAnswerTableRowEntry : Model -> Int -> Answer -> List (Html Msg) -> List (Html Msg)
-viewAnswerTableRowEntry ( { answers } as model ) answerIndex answer l =
+prepareButton : (Int -> Element Msg) -> IndexedColumn Answer Msg
+prepareButton fnc =
+    { header = Element.text ""
+    , width = shrink
+    , view =
+        \index _ ->
+            fnc index
+    }
+
+prepareIsCorrect : (Int -> Element Msg) -> IndexedColumn Answer Msg
+prepareIsCorrect fnc =
+    { header = Element.text "Is Correct Answer?"
+    , width = shrink
+    , view =
+        \index _ ->
+            fnc index
+    }
+
+prepareAnswerInput : IndexedColumn Answer Msg
+prepareAnswerInput =
+    { header = Element.text "Answer"
+    , width = fill
+    , view =
+        \index answer ->
+            case answer of
+                Answer s ->
+                    Input.text
+                        [ centerY ]
+                        { onChange = Update index
+                        , text = s
+                        , placeholder = Just (Input.placeholder [ ] (Element.text "Supply an answer here."))
+                        , label = Input.labelHidden "Input this answer here."
+                        }
+    }
+
+viewAnswersTable : Model -> Element Msg
+viewAnswersTable ( { answers } as model ) =
     let
         numberAnswers = Dict.size answers
-        entry =
-            tr
-                [ ]
-                [ viewMoveAnswerTopButton answerIndex
-                , viewMoveAnswerUpButton answerIndex
-                , viewMoveAnswerDownButton answerIndex numberAnswers
-                , viewMoveAnswerBottomButton answerIndex numberAnswers
-                , viewDeleteButton answerIndex numberAnswers
-                , viewIsCorrectRadioButton model answerIndex
-                , input
-                    [ type_ "text"
-                    , value (answerToString answer)
-                    , onInput (Update answerIndex)
-                    ]
-                    [ ]
-                ]
     in
-    List.append l (List.singleton entry)
+    Element.indexedTable
+        [ spacing 10 ]
+        { data = Dict.values answers
+        , columns =
+            [ prepareButton viewMoveAnswerTopButton
+            , prepareButton viewMoveAnswerUpButton
+            , prepareButton (viewMoveAnswerDownButton numberAnswers)
+            , prepareButton (viewMoveAnswerBottomButton numberAnswers)
+            , prepareButton (viewDeleteButton numberAnswers)
+            , prepareIsCorrect (viewIsCorrectCheckbox model)
+            , prepareAnswerInput
+            ]
+        }
 
-viewAnswersTable : Model -> Html Msg
-viewAnswersTable ( { answers } as model ) =
-    Dict.foldl (viewAnswerTableRowEntry model) [ ] answers
-        |> table [ class "edit-page-answers-table" ]
-
-view : Model -> Html Msg
+view : Model -> Element Msg
 view model =
-    div
-        [ class "edit-page-answers" ]
+    column
+        [ Font.size 14
+        , padding 10
+        ]
         [ viewHeader
         , viewActionButtons
-        , viewAnswersTable model
-        ]
+        , viewAnswersTable model]
