@@ -2,9 +2,7 @@ module Data.AnswersArea exposing (answersAreaDecoder, encodeAnswersArea, establi
 
 import Data.ProjectHelpers as ProjectHelpers
 import Dict exposing (Dict)
-import Element exposing (Attribute, centerX, centerY, column, Element, el, fill, IndexedColumn, padding, paragraph, rgb255, shrink, spacing)
-import Element.Background as Background
-import Element.Border as Border
+import Element exposing (Attribute, centerX, centerY, column, Element, el, fill, IndexedColumn, padding, paragraph, shrink, spacing)
 import Element.Font as Font
 import Element.Input as Input
 import Json.Decode exposing (Decoder, field, map, string, succeed)
@@ -13,6 +11,7 @@ import Json.Decode.Pipeline exposing (custom, hardcoded, required)
 import Json.Encode as Encode
 import Parser exposing ((|.), (|=), end, int, Parser, run, symbol, token)
 import Task exposing (Task)
+import UIHelpers exposing (buttonAttributes, green)
 
 type OptRadio =
     OptRadio String
@@ -357,28 +356,6 @@ viewActionButtons =
         { onPress = Just Add
         , label = Element.text "Add Another Answer"
         }
-
-lightGrey : Element.Color
-lightGrey =
-    rgb255 211 211 211
-
-black : Element.Color
-black =
-    rgb255 0 0 0
-
-green : Element.Color
-green =
-    rgb255 0 128 0
-
-buttonAttributes : List (Attribute Msg)
-buttonAttributes =
-    [ centerY
-    , padding 5
-    , Background.color lightGrey
-    , Border.rounded 3
-    , Border.color black
-    , Border.width 1
-    ]
 
 viewMoveAnswerTopButton : Int -> Element Msg
 viewMoveAnswerTopButton index =

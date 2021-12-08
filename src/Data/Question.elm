@@ -1,14 +1,14 @@
 module Data.Question exposing (encodeQuestion, establishIndexes, init, Model, Msg(..), questionDecoder, update, updateQuestionIndex, updateSlideIndex, view)
 
 import Data.AnswersArea as AnswersArea
-import Element exposing (el, layout)
-import Html exposing (Html, button, div, input, text)
-import Html.Attributes exposing (class, type_, value)
-import Html.Events exposing (onClick, onInput)
+import Element exposing (centerX, column, Element, padding, spacing)
+import Element.Font as Font
+import Element.Input as Input
 import Json.Decode exposing (Decoder, field, map, string, succeed)
 import Json.Decode.Pipeline exposing (custom, hardcoded)
 import Json.Encode as Encode
 import Task exposing (Task)
+import UIHelpers exposing (buttonAttributes)
 
 -- MODEL
 
@@ -180,43 +180,51 @@ update msg ( { questionIndex, answersArea } as model ) =
 
 -- VIEW
 
-viewQuestion : Model -> Html Msg
+viewQuestion : Model -> Element Msg
 viewQuestion { questionText } =
-    input
-        [ onInput Update
-        , type_ "text"
-        , value (textToString questionText)
-        ]
-        [ ]
+    Input.text
+        [ centerX ]
+        { onChange = Update
+        , text = (textToString questionText)
+        , placeholder = Just (Input.placeholder [ ] (Element.text "Supply a question here."))
+        , label = Input.labelHidden "Input this question here."
+        }
 
-viewAnswersButton : Model -> Html Msg
+viewAnswersButton : Model -> Element Msg
 viewAnswersButton ( { answersArea } ) =
     case answersArea of
         Hidden m ->
-            button
-                [ onClick ( UpdateVisibility (Visible m) ) ]
-                [ text "View Answers" ]
+            Input.button
+                (centerX :: buttonAttributes)
+                { onPress = Just ( UpdateVisibility (Visible m) )
+                , label = Element.text "View Answers"
+                }
 
         Visible m ->
-            button
-                [ onClick ( UpdateVisibility (Hidden m) ) ]
-                [ text "Hide Answers" ]
+            Input.button
+                (centerX :: buttonAttributes)
+                { onPress = Just ( UpdateVisibility (Hidden m) )
+                , label = Element.text "Hide Answers"
+                }
 
-viewAnswers : Model -> Html Msg
+viewAnswers : Model -> Element Msg
 viewAnswers ( { questionIndex, answersArea } ) =
     case answersArea of
         Hidden _ ->
-            div [ ] [ ]
+            Element.none
 
         Visible m ->
             AnswersArea.view m
-                |> layout [ ]
-                |> Html.map AnswersAreaMsg
+                |> Element.map AnswersAreaMsg
 
-view : Model -> Html Msg
+view : Model -> Element Msg
 view model =
-    div
-        [ class "edit-page-question" ]
+    column
+        [ Font.size 14
+        , padding 10
+        , spacing 10
+        , centerX
+        ]
         [ viewQuestion model
         , viewAnswersButton model
         , viewAnswers model

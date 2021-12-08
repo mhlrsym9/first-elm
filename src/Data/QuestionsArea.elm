@@ -3,6 +3,7 @@ module Data.QuestionsArea exposing (encodeQuestionsArea, establishIndexes, init,
 import Data.ProjectHelpers as ProjectHelpers
 import Data.Question as Question
 import Dict exposing (Dict)
+import Element exposing (Element, layout)
 import Html exposing (button, div, h2, Html, table, text, tr)
 import Html.Attributes exposing (class, disabled)
 import Html.Events exposing (onClick)
@@ -240,6 +241,7 @@ viewQuestionTableRowEntry numberQuestions index question l =
                 , viewMoveQuestionBottomButton index numberQuestions
                 , viewDeleteButton index numberQuestions
                 , Question.view question
+                    |> layout [ ]
                     |> Html.map (QuestionMsg index)
                 ]
     in
