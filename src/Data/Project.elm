@@ -4,10 +4,10 @@ import Data.ProjectHelpers as ProjectHelpers
 import Data.Slide as Slide
 import Dict exposing (Dict)
 import Dict.Extra
+import Element exposing (centerX, column, Element, padding, row, spacing)
+import Element.Font as Font
+import Element.Input as Input
 import Flags exposing (Flags)
-import Html exposing (Html, button, div, text)
-import Html.Attributes exposing (class, disabled)
-import Html.Events exposing (onClick)
 import Json.Decode exposing (Decoder, succeed)
 import Json.Decode.Extra exposing (indexedList)
 import Json.Decode.Pipeline exposing (hardcoded, required)
@@ -15,6 +15,7 @@ import Json.Encode as Encode
 import LanguageHelpers
 import Random
 import Task exposing (Task)
+import UIHelpers exposing (buttonAttributes)
 import UUID exposing (Seeds)
 
 type alias SlideDict =
@@ -297,64 +298,74 @@ update msg ( { slideIndex, slides } as model ) =
 
 -- VIEW
 
-viewFirstSlideButton : Model -> Html Msg
+viewFirstSlideButton : Model -> Element Msg
 viewFirstSlideButton { slideIndex, slides } =
     let
         numberSlides = Dict.size slides
     in
-    button
-        [ class "slide-button"
-        , disabled ( (slideIndex == 0) || (numberSlides == 1) )
-        , onClick ( UpdateCurrentSlideContents ( DisplaySlide 0 ) )
-        ]
-        [ text "<<- First" ]
+    if ((0 == slideIndex) || (1 == numberSlides)) then
+        Element.none
+    else
+        Input.button
+            buttonAttributes
+            { onPress = Just ( UpdateCurrentSlideContents ( DisplaySlide 0 ) )
+            , label = Element.text "<<- First"
+            }
 
-viewPreviousSlideButton : Model -> Html Msg
+viewPreviousSlideButton : Model -> Element Msg
 viewPreviousSlideButton { slideIndex, slides } =
     let
         numberSlides = Dict.size slides
     in
-    button
-        [ class "slide-button"
-        , disabled ( (slideIndex == 0) || (numberSlides == 1) )
-        , onClick ( UpdateCurrentSlideContents ( DisplaySlide (slideIndex - 1) ) )
-        ]
-        [ text "<- Previous"]
+    if ((0 == slideIndex) || (1 == numberSlides)) then
+        Element.none
+    else
+        Input.button
+            buttonAttributes
+            { onPress = Just ( UpdateCurrentSlideContents ( DisplaySlide (slideIndex - 1) ) )
+            , label = Element.text "<- Previous"
+            }
 
-viewNextSlideButton : Model -> Html Msg
+viewNextSlideButton : Model -> Element Msg
 viewNextSlideButton { slideIndex, slides } =
     let
         numberSlides = Dict.size slides
     in
-    button
-        [ class "slide-button"
-        , disabled ( slideIndex == (numberSlides - 1) )
-        , onClick ( UpdateCurrentSlideContents ( DisplaySlide ( slideIndex + 1 ) ) )
-        ]
-        [ text "Next ->" ]
+    if (slideIndex == (numberSlides - 1)) then
+        Element.none
+    else
+        Input.button
+            buttonAttributes
+            { onPress = Just ( UpdateCurrentSlideContents ( DisplaySlide (slideIndex + 1) ) )
+            , label = Element.text "Next ->"
+            }
 
-viewLastSlideButton : Model -> Html Msg
+viewLastSlideButton : Model -> Element Msg
 viewLastSlideButton { slideIndex, slides } =
     let
         numberSlides = Dict.size slides
     in
-    button
-        [ class "slide-button"
-        , disabled ( slideIndex == (numberSlides - 1) )
-        , onClick (UpdateCurrentSlideContents ( DisplaySlide (numberSlides - 1) ) )
-        ]
-        [ text "Last ->>" ]
+    if (slideIndex == (numberSlides - 1)) then
+        Element.none
+    else
+        Input.button
+            buttonAttributes
+            { onPress = Just (UpdateCurrentSlideContents ( DisplaySlide (numberSlides - 1) ) )
+            , label = Element.text "Last ->>"
+            }
 
-viewSlideInfoRow : Model -> Html Msg
+viewSlideInfoRow : Model -> Element Msg
 viewSlideInfoRow ( { slideIndex, slides } as model ) =
     let
         numberSlides = Dict.size slides
     in
-    div
-        [ class "edit-page-slide-info-row" ]
+    row
+        [ centerX
+        , spacing 10
+        ]
         [ viewFirstSlideButton model
         , viewPreviousSlideButton model
-        , text
+        , Element.text
             ( "Slide "
             ++ ( String.fromInt ( slideIndex + 1 ) )
             ++ " of "
@@ -364,123 +375,141 @@ viewSlideInfoRow ( { slideIndex, slides } as model ) =
         , viewLastSlideButton model
         ]
 
-viewInsertAtTopButton : Html Msg
+viewInsertAtTopButton : Element Msg
 viewInsertAtTopButton =
-    button
-        [ class "slide-button"
-        , onClick ( UpdateCurrentSlideContents ( InsertSlide ProjectHelpers.Top ) )
-        ]
-        [ text "<<- Add new slide before first slide"]
+    Input.button
+        buttonAttributes
+        { onPress = Just ( UpdateCurrentSlideContents ( InsertSlide ProjectHelpers.Top ) )
+        , label = Element.text "<<- Add new slide before first slide"
+        }
 
-viewInsertBeforeSlideButton : Html Msg
+viewInsertBeforeSlideButton : Element Msg
 viewInsertBeforeSlideButton =
-    button
-        [ class "slide-button"
-        , onClick ( UpdateCurrentSlideContents ( InsertSlide ProjectHelpers.Up ) )
-        ]
-        [ text "<- Add new slide before this slide"]
+    Input.button
+        buttonAttributes
+        { onPress = Just ( UpdateCurrentSlideContents ( InsertSlide ProjectHelpers.Up ) )
+        , label = Element.text "<- Add new slide before this slide"
+        }
 
-viewInsertAfterSlideButton : Html Msg
+viewInsertAfterSlideButton : Element Msg
 viewInsertAfterSlideButton =
-    button
-        [ class "slide-button"
-        , onClick (UpdateCurrentSlideContents ( InsertSlide ProjectHelpers.Down ) )
-        ]
-        [ text "Add new slide after this slide ->"]
+    Input.button
+        buttonAttributes
+        { onPress = Just ( UpdateCurrentSlideContents ( InsertSlide ProjectHelpers.Down ) )
+        , label = Element.text "Add new slide after this slide ->"
+        }
 
-viewInsertAtBottomButton : Html Msg
+viewInsertAtBottomButton : Element Msg
 viewInsertAtBottomButton =
-    button
-        [ class "slide-button"
-        , onClick ( UpdateCurrentSlideContents ( InsertSlide ProjectHelpers.Bottom ) )
-        ]
-        [ text "Add new slide after last slide ->>"]
+    Input.button
+        buttonAttributes
+        { onPress = Just ( UpdateCurrentSlideContents ( InsertSlide ProjectHelpers.Bottom ) )
+        , label = Element.text "Add new slide after last slide ->>"
+        }
 
-viewInsertSlideActionRow : Html Msg
+viewInsertSlideActionRow : Element Msg
 viewInsertSlideActionRow =
-    div
-         [ class "edit-page-insert-slide-action-row" ]
+    row
+         [ spacing 10
+         , centerX
+         ]
          [ viewInsertAtTopButton
          , viewInsertBeforeSlideButton
          , viewInsertAfterSlideButton
          , viewInsertAtBottomButton
          ]
 
-viewMoveSlideToTopButton : Model -> Html Msg
+viewMoveSlideToTopButton : Model -> Element Msg
 viewMoveSlideToTopButton { slideIndex } =
-    button
-        [ onClick ( UpdateCurrentSlideContents ( Move ProjectHelpers.Top ) )
-        , disabled (0 == slideIndex)
-        ]
-        [ text "Move Slide to Top" ]
+    if (0 == slideIndex) then
+        Element.none
+    else
+        Input.button
+            buttonAttributes
+            { onPress = Just ( UpdateCurrentSlideContents ( Move ProjectHelpers.Top ) )
+            , label = Element.text "Move Slide to Top"
+            }
 
-viewMoveSlideUpButton : Model -> Html Msg
+viewMoveSlideUpButton : Model -> Element Msg
 viewMoveSlideUpButton { slideIndex } =
-    button
-        [ onClick ( UpdateCurrentSlideContents ( Move ProjectHelpers.Up ) )
-        , disabled (0 == slideIndex)
-        ]
-        [ text "Move Slide Up" ]
+    if (0 == slideIndex) then
+        Element.none
+    else
+        Input.button
+            buttonAttributes
+            { onPress = Just ( UpdateCurrentSlideContents ( Move ProjectHelpers.Up ) )
+            , label = Element.text "Move Slide Up"
+            }
 
-viewMoveSlideDownButton : Model -> Html Msg
+viewMoveSlideDownButton : Model -> Element Msg
 viewMoveSlideDownButton { slideIndex, slides }  =
     let
         numberSlides = Dict.size slides
     in
-    button
-        [ onClick ( UpdateCurrentSlideContents ( Move ProjectHelpers.Down ) )
-        , disabled ( slideIndex == (numberSlides - 1) )
-        ]
-        [ text "Move Slide Down" ]
+    if ( slideIndex == (numberSlides - 1) ) then
+        Element.none
+    else
+        Input.button
+            buttonAttributes
+            { onPress = Just ( UpdateCurrentSlideContents ( Move ProjectHelpers.Down ) )
+            , label = Element.text "Move Slide Down"
+            }
 
-viewMoveSlideToBottomButton : Model -> Html Msg
+viewMoveSlideToBottomButton : Model -> Element Msg
 viewMoveSlideToBottomButton { slideIndex, slides } =
     let
         numberSlides = Dict.size slides
     in
-    button
-        [ onClick ( UpdateCurrentSlideContents ( Move ProjectHelpers.Bottom ) )
-        , disabled ( slideIndex == (numberSlides - 1) )
-        ]
-        [ text "Move Slide to Bottom" ]
+    if ( slideIndex == (numberSlides - 1) ) then
+        Element.none
+    else
+        Input.button
+            buttonAttributes
+            { onPress = Just ( UpdateCurrentSlideContents ( Move ProjectHelpers.Bottom ) )
+            , label = Element.text "Move Slide to Bottom"
+            }
 
-viewMoveSlideActionRow : Model -> Html Msg
+viewMoveSlideActionRow : Model -> Element Msg
 viewMoveSlideActionRow model =
-    div
-        [ class "edit-page-move-slide-action-row" ]
+    row
+        [ spacing 10
+        , centerX
+        ]
         [ viewMoveSlideToTopButton model
         , viewMoveSlideUpButton model
         , viewMoveSlideDownButton model
         , viewMoveSlideToBottomButton model
         ]
 
-viewDeleteSlideActionRow : Model -> Html Msg
+viewDeleteSlideActionRow : Model -> Element Msg
 viewDeleteSlideActionRow { slides } =
-    div
-        [ class "edit-page-delete-slide-action-row" ]
-        [
-            button
-                [ class "slide-button"
-                , disabled ( 1 == Dict.size slides )
-                , onClick DeleteSlide
-                ]
-                [ text "Delete This Slide" ]
-        ]
+    if ( 1 == Dict.size slides ) then
+        Element.none
+    else
+    Input.button
+        (centerX :: buttonAttributes)
+        { onPress = Just DeleteSlide
+        , label = Element.text "Delete This Slide"
+        }
 
-viewSlide : Maybe Slide.Model -> Html Msg
+viewSlide : Maybe Slide.Model -> Element Msg
 viewSlide maybeSlide =
     case maybeSlide of
         Just slide ->
             Slide.view slide
-                |> Html.map SlideMsg
+                |> Element.map SlideMsg
 
         Nothing ->
-            div [ ] [ ]
+            Element.none
 
-viewCurrentSlide : Model -> Html Msg
+viewCurrentSlide : Model -> Element Msg
 viewCurrentSlide ( { slideIndex, slides } as model ) =
-    div
-        [ class "edit-page-current-slide" ]
+    column
+        [ Font.size 14
+        , centerX
+        , padding 10
+        , spacing 10
+        ]
         [ viewSlideInfoRow model
         , viewInsertSlideActionRow
         , viewMoveSlideActionRow model
@@ -488,6 +517,6 @@ viewCurrentSlide ( { slideIndex, slides } as model ) =
         , viewSlide (Dict.get slideIndex slides)
         ]
 
-view : Model -> Html Msg
+view : Model -> Element Msg
 view model =
     viewCurrentSlide model

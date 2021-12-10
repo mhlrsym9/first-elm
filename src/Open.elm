@@ -2,10 +2,10 @@ module Open exposing (Model, Msg, init, update, view)
 
 import Api
 import Browser.Navigation as Navigation
+import Element exposing (centerX, centerY, Column, column, Element, fill, shrink, spacing)
+import Element.Font as Font
+import Element.Input as Input
 import Flags exposing (Flags)
-import Html exposing (Html, button, div, h3, table, text, tr)
-import Html.Attributes exposing (class)
-import Html.Events exposing (onClick)
 import Http exposing (stringResolver)
 import Json.Decode exposing (Decoder, decodeString, list, string, succeed)
 import Json.Decode.Pipeline exposing (required)
@@ -16,6 +16,7 @@ import List.Extra
 import Loading
 import Routes
 import Task exposing (Task)
+import UIHelpers exposing (buttonAttributes)
 import ViewHelpers
 
 -- MODEL
@@ -120,16 +121,6 @@ extractContentCodes pds f =
         |> List.map f
         |> List.Extra.unique
 
-getProjectDescriptions : Model -> ProjectDescriptions
-getProjectDescriptions model =
-    case model of
-        Success { projectDescriptions } ->
-            case projectDescriptions of
-                Api.Loaded a ->
-                    a
-                _ ->
-                    [ ]
-
 matchedProjectDescriptions : Api.Status ProjectDescriptions -> (String -> String -> ProjectDescription -> Bool) -> String -> String -> ProjectDescriptions
 matchedProjectDescriptions projectDescriptions f kcc lcc =
     case projectDescriptions of
@@ -162,8 +153,8 @@ updateKnownLanguagesFilter learningLanguageMsg data =
         ]
     )
 
-justPassthroughKnownLanguagesFilter : LanguageSelect.Msg -> Data -> (Model, Cmd Msg)
-justPassthroughKnownLanguagesFilter knownLanguageMsg data =
+justPassThroughKnownLanguagesFilter : LanguageSelect.Msg -> Data -> (Model, Cmd Msg)
+justPassThroughKnownLanguagesFilter knownLanguageMsg data =
     let
         ( updatedModel, updatedCmd ) =
             LanguageSelect.update knownLanguageMsg data.knownLanguageModel
@@ -192,8 +183,8 @@ updateLearningLanguagesFilter knownLanguageMsg data =
         ]
     )
 
-justPassthroughLearningLanguagesFilter : LanguageSelect.Msg -> Data -> (Model, Cmd Msg)
-justPassthroughLearningLanguagesFilter learningLanguageMsg data =
+justPassThroughLearningLanguagesFilter : LanguageSelect.Msg -> Data -> (Model, Cmd Msg)
+justPassThroughLearningLanguagesFilter learningLanguageMsg data =
     let
         ( updatedModel, updatedCmd ) =
             LanguageSelect.update learningLanguageMsg data.learningLanguageModel
@@ -267,10 +258,10 @@ update msg model =
                             updateLearningLanguagesFilter knownLanguageMsg data
 
                         _ ->
-                            justPassthroughKnownLanguagesFilter knownLanguageMsg data
+                            justPassThroughKnownLanguagesFilter knownLanguageMsg data
 
                 _ ->
-                    justPassthroughKnownLanguagesFilter knownLanguageMsg data
+                    justPassThroughKnownLanguagesFilter knownLanguageMsg data
 
         ( LearningLanguageMsg learningLanguageMsg, Success data ) ->
             case data.projectDescriptions of
@@ -280,10 +271,10 @@ update msg model =
                             updateKnownLanguagesFilter learningLanguageMsg data
 
                         _ ->
-                            justPassthroughLearningLanguagesFilter learningLanguageMsg data
+                            justPassThroughLearningLanguagesFilter learningLanguageMsg data
 
                 _ ->
-                    justPassthroughLearningLanguagesFilter learningLanguageMsg data
+                    justPassThroughLearningLanguagesFilter learningLanguageMsg data
 
         ( Open projectKey, Success { navigationKey } ) ->
             ( model, processProjectKey projectKey navigationKey Routes.EditExisting )
@@ -307,70 +298,101 @@ update msg model =
 
 -- VIEW
 
-viewProjectsHeader : Html Msg
+viewProjectsHeader : Element Msg
 viewProjectsHeader =
-    h3
-        [ class "open-page-projects-header" ]
-        [ text "Projects" ]
-
-viewProjectDescription : ProjectDescription -> Html Msg
-viewProjectDescription ( { project } as pd ) =
-    let
-        key = Encode.encode 0 ( encodeProjectDescription pd )
-    in
-    tr
-        [ ]
-        [ div
-            [ ]
-            [ text project
-            , button
-                [ onClick ( Open key ) ]
-                [ text "Edit" ]
-            , button
-                [ onClick ( Delete key ) ]
-                [ text "Delete" ]
-            , button
-                [ onClick ( Generate Alphabet key ) ]
-                [ text "Generate Alphabet Slides" ]
-            , button
-                [ onClick ( Generate CourseWare key ) ]
-                [ text "Generate CourseWare Slides" ]]
+    Element.el
+        [ Font.size 24
+        , centerX
         ]
+        ( Element.text "Projects" )
 
-viewProjectsTable : ProjectDescriptions -> Html Msg
+prepareProjectText : Column ProjectDescription Msg
+prepareProjectText =
+    { header = Element.text ""
+    , width = fill
+    , view =
+        \{ project } ->
+            Element.el [ centerY ] (Element.text project)
+    }
+
+viewButton : Msg -> String -> Element Msg
+viewButton msg label =
+    Input.button
+        buttonAttributes
+        { onPress = Just msg
+        , label = Element.text label
+        }
+
+viewOpenButton : String -> Element Msg
+viewOpenButton key =
+    viewButton (Open key) "Edit"
+
+viewDeleteButton : String -> Element Msg
+viewDeleteButton key =
+    viewButton (Delete key) "Delete"
+
+viewGenerateAlphabetButton : String -> Element Msg
+viewGenerateAlphabetButton key =
+    viewButton (Generate Alphabet key) "Generate Alphabet Slides"
+
+viewGenerateCourseWareButton : String -> Element Msg
+viewGenerateCourseWareButton key =
+    viewButton (Generate CourseWare key) "Generate CourseWare Slides"
+
+prepareButton : (String -> Element Msg) -> Column ProjectDescription Msg
+prepareButton fnc =
+    { header = Element.text ""
+    , width = shrink
+    , view =
+        \pd ->
+            let
+                key = Encode.encode 0 ( encodeProjectDescription pd )
+            in
+            fnc key
+    }
+
+viewProjectsTable : ProjectDescriptions -> Element Msg
 viewProjectsTable displayedProjectDescriptions =
-    table
-        [ class "open-page-projects-table" ]
-        (List.map viewProjectDescription displayedProjectDescriptions)
+    Element.table
+        [ spacing 10 ]
+        { data = displayedProjectDescriptions
+        , columns =
+            [ prepareProjectText
+            , prepareButton viewOpenButton
+            , prepareButton viewDeleteButton
+            , prepareButton viewGenerateAlphabetButton
+            , prepareButton viewGenerateCourseWareButton
+            ]
+        }
 
-view : Model -> Html Msg
+view : Model -> Element Msg
 view model =
     case model of
         Success { knownLanguageModel, learningLanguageModel, loadingPath, chosenProject, projectDescriptions, displayedProjectDescriptions } ->
             case projectDescriptions of
                 Api.Failed ->
-                    div [] [ Loading.error "project descriptions" ]
+                    Element.el
+                        [ ]
+                        ( Loading.error "project descriptions" )
 
                 Api.Loaded _ ->
-                    div
-                        [ class "open-page" ]
+                    column
+                        [ spacing 10
+                        , centerX
+                        ]
                         [ ViewHelpers.viewLanguageSelect "Filter Projects by L1" KnownLanguageMsg knownLanguageModel
                         , ViewHelpers.viewLanguageSelect "Filter Projects by L2" LearningLanguageMsg learningLanguageModel
-                        , div
-                            [ class "open-page-projects" ]
-                            [ viewProjectsHeader
-                            , viewProjectsTable displayedProjectDescriptions
-                            ]
-                        , div
-                            [ ]
-                            [ button
-                                [ onClick Cancel ]
-                                [ text "Cancel" ]
-                            ]
+                        , viewProjectsHeader
+                        , viewProjectsTable displayedProjectDescriptions
+                        , Input.button
+                            ( centerX :: buttonAttributes )
+                            { onPress = Just Cancel
+                            , label = Element.text "Cancel"
+                            }
                         ]
 
                 Api.Loading _ ->
-                    div [] []
+                    Element.none
 
                 Api.LoadingSlowly _ ->
-                    div [] [ Loading.icon loadingPath ]
+                    Loading.iconElement loadingPath

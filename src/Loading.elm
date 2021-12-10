@@ -1,27 +1,25 @@
-module Loading exposing (error, icon, slowThreshold)
+module Loading exposing (error, iconElement, slowThreshold)
 
 {-| A loading spinner icon.
 -}
 
-import Asset
-import Html exposing (Attribute, Html)
-import Html.Attributes exposing (alt, height, width)
+import Element exposing (Element)
 import Process
 import Task exposing (Task)
 
-icon : String -> Html msg
-icon loadingPath =
-    Html.img
-        [ Asset.src (Asset.image loadingPath)
-        , width 200
-        , height 200
-        , alt "Loading..."
+iconElement : String -> Element msg
+iconElement loadingPath =
+    Element.image
+        [ Element.width (Element.px 200)
+        , Element.height (Element.px 200)
         ]
-        []
+        { src = loadingPath
+        , description = "Loading..."
+        }
 
-error : String -> Html msg
+error : String -> Element msg
 error str =
-    Html.text ("Error loading " ++ str ++ ".")
+    Element.text ("Error loading " ++ str ++ ".")
 
 slowThreshold : Task x ()
 slowThreshold =

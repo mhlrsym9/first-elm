@@ -4,14 +4,16 @@ import Api
 import Bytes exposing (Bytes)
 import Data.QuestionsArea as QuestionsArea
 import Dict exposing (Dict)
+import Element exposing (centerX, centerY, Column, column, el, Element, fill, html, padding, row, spacing, table, width)
+import Element.Font as Font
+import Element.Input as Input
+import Element.Keyed as Keyed
 import File exposing (File)
 import File.Select as Select
 import Flags exposing (Flags)
 import Http exposing (bytesBody, bytesResolver, stringResolver)
-import Html exposing (button, div, h2, h3, Html, input, label, table, text, tr)
-import Html.Attributes exposing (attribute, class, disabled, type_, value)
-import Html.Events exposing (onClick, onInput)
-import Html.Keyed as Keyed
+import Html exposing (Html, text)
+import Html.Attributes exposing (attribute, class)
 import Json.Decode exposing (Decoder, field, list, map, string, succeed)
 import Json.Decode.Pipeline exposing (custom, hardcoded, optional, required)
 import Json.Encode as Encode
@@ -21,8 +23,9 @@ import Procedure exposing (Procedure)
 import Procedure.Program
 import Random
 import Task exposing (Task)
-import UUID exposing (Seeds)
+import UIHelpers exposing (buttonAttributes)
 import Url.Builder as Builder
+import UUID exposing (Seeds)
 
 -- MODEL
 
@@ -538,27 +541,31 @@ update msg ( { images, procModel, questionsArea, sounds, videos } as model ) =
 
 -- VIEW
 
-viewTinyMCEEditor : Model -> (String, Html Msg)
+viewTinyMCEEditor : Model -> (String, Element Msg)
 viewTinyMCEEditor { initParams, slideId, slideText } =
+    let
+        node = Html.node "tinymce-editor"
+           [ attribute "api-key" "no-api-key"
+           , attribute "config" initParams.flags.editorConfigName
+           , attribute "height" "500"
+           , attribute "plugins" "link image anchor media table paste code help"
+           , attribute "toolbar" "undo redo | bold italic underline | forecolor backcolor | alignleft aligncenter alignright | fontselect fontsizeselect | code | help"
+           , attribute "setup" initParams.flags.setupEditorName
+           ]
+           [ text (textToString slideText) ]
+    in
     ( "tinymce-editor-" ++ slideId
-    , Html.node "tinymce-editor"
-        [ attribute "api-key" "no-api-key"
-        , attribute "config" initParams.flags.editorConfigName
-        , attribute "height" "500"
-        , attribute "plugins" "link image anchor media table paste code help"
-        , attribute "toolbar" "undo redo | bold italic underline | forecolor backcolor | alignleft aligncenter alignright | fontselect fontsizeselect | code | help"
-        , attribute "setup" initParams.flags.setupEditorName
-        ]
-        [ text (textToString slideText) ]
-    )
+    , Element.el [ centerX, width fill ] ( html node ) )
 
-viewSlideComponentsHeader : Html Msg
+viewSlideComponentsHeader : Element Msg
 viewSlideComponentsHeader =
-    h2
-        [ class "edit-page-slide-components-header" ]
-        [ text "Slide Components" ]
+    el
+        [ Font.size 24
+        , centerX
+        ]
+        ( Element.text "Slide Components" )
 
-viewSlideImages : Model -> Html Msg
+viewSlideImages : Model -> Element Msg
 viewSlideImages { images, sounds, videos } =
     let
         updatedImages =
@@ -586,11 +593,13 @@ viewSlideImages { images, sounds, videos } =
                     videos
 
     in
-    button
-        [ onClick ( UpdateImagesVisibility updatedImages updatedSounds updatedVideos ) ]
-        [ text "Manage Slide Images" ]
+    Input.button
+        buttonAttributes
+        { onPress = Just ( UpdateImagesVisibility updatedImages updatedSounds updatedVideos )
+        , label = Element.text "Manage Slide Images"
+        }
 
-viewSlideSounds : Model -> Html Msg
+viewSlideSounds : Model -> Element Msg
 viewSlideSounds { images, sounds, videos } =
     let
         updatedImages =
@@ -618,11 +627,13 @@ viewSlideSounds { images, sounds, videos } =
                     videos
 
     in
-    button
-        [ onClick ( UpdateSoundsVisibility updatedImages updatedSounds updatedVideos ) ]
-        [ text "Manage Slide Sounds" ]
+    Input.button
+        buttonAttributes
+        { onPress = Just ( UpdateSoundsVisibility updatedImages updatedSounds updatedVideos )
+        , label = Element.text "Manage Slide Sounds"
+        }
 
-viewSlideVideos : Model -> Html Msg
+viewSlideVideos : Model -> Element Msg
 viewSlideVideos { images, sounds, videos } =
     let
         updatedImages =
@@ -650,9 +661,11 @@ viewSlideVideos { images, sounds, videos } =
                     VisibleVideos is
 
     in
-    button
-        [ onClick ( UpdateVideosVisibility updatedImages updatedSounds updatedVideos ) ]
-        [ text "Manage Slide Videos" ]
+    Input.button
+        buttonAttributes
+        { onPress = Just ( UpdateVideosVisibility updatedImages updatedSounds updatedVideos )
+        , label = Element.text "Manage Slide Videos"
+        }
 
 toBaseUrl : ComponentType -> String
 toBaseUrl t =
@@ -664,10 +677,12 @@ toBaseUrl t =
         Video ->
             "video"
 
-viewSlideComponentButtons : Model -> Html Msg
+viewSlideComponentButtons : Model -> Element Msg
 viewSlideComponentButtons model =
-    div
-        [ ]
+    row
+        [ centerX
+        , spacing 10
+        ]
         [ viewSlideImages model
         , viewSlideSounds model
         , viewSlideVideos model
@@ -687,23 +702,17 @@ toComponentDescription t =
     in
     "Description of " ++ header ++ " to stage:"
 
-viewComponentDescription : Model -> ComponentType -> Html Msg
+viewComponentDescription : Model -> ComponentType -> Element Msg
 viewComponentDescription { componentDescription } t =
-    div
+    Input.text
         [ ]
-        [ label
-            [ ]
-            [ text ( toComponentDescription t )
-            , input
-                [ type_ "text"
-                , value componentDescription
-                , onInput ComponentDescriptionInput
-                ]
-                [ ]
-            ]
-        ]
+        { onChange = ComponentDescriptionInput
+        , text = componentDescription
+        , placeholder = Just (Input.placeholder [ ] (Element.text "Supply a desciption here."))
+        , label = Input.labelLeft [ ] (Element.text (toComponentDescription t))
+        }
 
-toLoadComponentButtonText : ComponentType -> String
+toLoadComponentButtonText : ComponentType -> Element Msg
 toLoadComponentButtonText t =
     let
         s =
@@ -715,25 +724,32 @@ toLoadComponentButtonText t =
                 Video ->
                     "video"
     in
-    "Select " ++ s ++ " file to stage"
+    Element.text ("Select " ++ s ++ " file to stage")
 
-toLoadComponentButtonMsg : ComponentType -> Msg
+toLoadComponentButtonMsg : ComponentType -> Maybe Msg
 toLoadComponentButtonMsg t =
-    case t of
-        Image ->
-            ImageRequested
-        Sound ->
-            SoundRequested
-        Video ->
-            VideoRequested
+    let
+        m =
+            case t of
+                Image ->
+                    ImageRequested
+                Sound ->
+                    SoundRequested
+                Video ->
+                    VideoRequested
+    in
+    Just m
 
-viewLoadComponentFromFile : Model -> ComponentType -> Html Msg
+viewLoadComponentFromFile : Model -> ComponentType -> Element Msg
 viewLoadComponentFromFile { componentDescription } componentType =
-    button
-        [ disabled ( String.isEmpty componentDescription )
-        , onClick (toLoadComponentButtonMsg componentType)
-        ]
-        [ text (toLoadComponentButtonText componentType ) ]
+    if (String.isEmpty componentDescription) then
+        Element.none
+    else
+        Input.button
+            buttonAttributes
+            { onPress = toLoadComponentButtonMsg componentType
+            , label = toLoadComponentButtonText componentType
+            }
 
 toLoadUrlComponentLabelText : ComponentType -> String
 toLoadUrlComponentLabelText t =
@@ -749,7 +765,7 @@ toLoadUrlComponentLabelText t =
     in
     "URL of " ++ s ++ " to stage:"
 
-toLoadUrlComponentButtonText : ComponentType -> String
+toLoadUrlComponentButtonText : ComponentType -> Element Msg
 toLoadUrlComponentButtonText t =
     let
         s =
@@ -761,40 +777,41 @@ toLoadUrlComponentButtonText t =
                 Video ->
                     "video"
     in
-    "Stage " ++ s ++ " on server"
+    Element.text ("Stage " ++ s ++ " on server")
 
-toLoadUrlComponentButtonMsg : ComponentType -> Msg
+toLoadUrlComponentButtonMsg : ComponentType -> Maybe Msg
 toLoadUrlComponentButtonMsg t =
-    case t of
-        Image ->
-            ImageUrlRequested
-        Sound ->
-            SoundUrlRequested
-        Video ->
-            VideoUrlRequested
+    let
+        m =
+            case t of
+                Image ->
+                    ImageUrlRequested
+                Sound ->
+                    SoundUrlRequested
+                Video ->
+                    VideoUrlRequested
+    in
+    Just m
 
-viewLoadComponentFromUrl : Model -> ComponentType -> Html Msg
+viewLoadComponentFromUrl : Model -> ComponentType -> Element Msg
 viewLoadComponentFromUrl { componentDescription, componentUrl } componentType =
-    div
-        [ ]
-        [ label
+    row
+        [ spacing 10 ]
+        [ Input.text
             [ ]
-            [ text ( toLoadUrlComponentLabelText componentType )
-            , input
-                [ type_ "text"
-                , value componentUrl
-                , onInput ComponentUrlInput
-                ]
-                [ ]
-            , button
-                [ disabled ( String.isEmpty componentDescription || String.isEmpty componentUrl )
-                , onClick ( toLoadUrlComponentButtonMsg componentType )
-                ]
-                [ text ( toLoadUrlComponentButtonText componentType) ]
-            ]
+            { onChange = ComponentUrlInput
+            , text = componentUrl
+            , placeholder = Just (Input.placeholder [ ] (Element.text "Supply a valid URL here."))
+            , label = Input.labelLeft [ ] (Element.text ( toLoadUrlComponentLabelText componentType ))
+            }
+        , Input.button
+            buttonAttributes
+            { onPress = toLoadUrlComponentButtonMsg componentType
+            , label = toLoadUrlComponentButtonText componentType
+            }
         ]
 
-viewStagedComponentsHeader : ComponentType -> Html Msg
+viewStagedComponentsHeader : ComponentType -> Element Msg
 viewStagedComponentsHeader ct =
     let
         s =
@@ -806,35 +823,46 @@ viewStagedComponentsHeader ct =
                 Video ->
                     "Video"
     in
-    h3
-        [ class "edit-page-slide-staged-components-header" ]
-        [ text ("Staged " ++ s ++ " Components") ]
+    el
+        [ Font.size 24
+        , centerX
+        ]
+        ( Element.text ("Staged " ++ s ++ " Components") )
 
-viewComponent : InitParams -> ComponentType -> SlideComponent -> List (Html Msg) -> List (Html Msg)
-viewComponent { flags, knownLanguage, learningLanguage, projectName } componentType { description, id } l =
-    let
-        url = Builder.relative
-            [ flags.candorUrl
-            , ( toBaseUrl componentType )
-            , LanguageHelpers.contentCodeStringFromLanguage knownLanguage
-            , LanguageHelpers.contentCodeStringFromLanguage learningLanguage
-            , projectName
-            , id
-            ] []
-        entry =
-            tr
-                [ ]
-                [ text description
-                , Html.node "clipboard-copy"
+prepareDescription : Column SlideComponent Msg
+prepareDescription =
+    { header = Element.text "Description"
+    , width = fill
+    , view =
+        \{ description } ->
+            el [ centerY ] (Element.text description)
+    }
+
+prepareCopyUrlButton : InitParams -> ComponentType -> Column SlideComponent Msg
+prepareCopyUrlButton { flags, knownLanguage, learningLanguage, projectName } componentType =
+    { header = Element.none
+    , width = fill
+    , view =
+        \{ description, id } ->
+            let
+                url = Builder.relative
+                    [ flags.candorUrl
+                    , ( toBaseUrl componentType )
+                    , LanguageHelpers.contentCodeStringFromLanguage knownLanguage
+                    , LanguageHelpers.contentCodeStringFromLanguage learningLanguage
+                    , projectName
+                    , id
+                    ] []
+                node = Html.node "clipboard-copy"
                     [ attribute "value" url
                     , class "w3-button w3-black w3-round"
                     ]
                     [ text "Copy URL to clipboard" ]
-                ]
-    in
-    entry :: l
+            in
+            html node
+    }
 
-viewComponents : Model -> InitParams -> ComponentType -> List SlideComponent -> Html Msg
+viewComponents : Model -> InitParams -> ComponentType -> List SlideComponent -> Element Msg
 viewComponents model initParams componentType components =
     let
         ct =
@@ -845,19 +873,23 @@ viewComponents model initParams componentType components =
                     "sound"
                 Video ->
                     "video"
-        d = List.foldl (viewComponent initParams componentType) [ ] components
         t =
-            case d of
-                _ :: _ ->
-                    table
-                        [ class "edit-page-slide-components-table" ]
-                        (List.reverse d)
-
-                _ ->
-                    text ("No staged " ++ ct ++ " components")
+            if (List.isEmpty components) then
+                Element.text ("No staged " ++ ct ++ " components")
+            else
+                table
+                    [ spacing 10 ]
+                    { data = components
+                    , columns =
+                        [ prepareDescription
+                        , prepareCopyUrlButton initParams componentType
+                        ]
+                    }
     in
-    div
-        [ ]
+    column
+        [ centerX
+        , spacing 10
+        ]
         [ viewComponentDescription model componentType
         , viewLoadComponentFromFile model componentType
         , viewLoadComponentFromUrl model componentType
@@ -865,7 +897,7 @@ viewComponents model initParams componentType components =
         , t
         ]
 
-viewSlideComponents : Model -> Html Msg
+viewSlideComponents : Model -> Element Msg
 viewSlideComponents ( { images, initParams, sounds, videos } as model ) =
     case ( images, sounds, videos ) of
         ( VisibleImages vis, HiddenSounds _, HiddenVideos _ ) ->
@@ -878,30 +910,36 @@ viewSlideComponents ( { images, initParams, sounds, videos } as model ) =
             viewComponents model initParams Video vvs
 
         _ ->
-            div [ ] [ ]
+            Element.none
 
-viewSlideComponentsArea : Model -> (String, Html Msg)
+viewSlideComponentsArea : Model -> (String, Element Msg)
 viewSlideComponentsArea ( { initParams, slideId } as model ) =
     ( "candor-slide-components" ++ slideId
-    , div
-        [ ]
+    , column
+        [ centerX
+        , spacing 10
+        ]
         [ viewSlideComponentsHeader
         , viewSlideComponentButtons model
         , viewSlideComponents model
         ]
     )
 
-viewQuestionsArea : Model -> (String, Html Msg)
+viewQuestionsArea : Model -> (String, Element Msg)
 viewQuestionsArea { initParams, questionsArea, slideId } =
     ( "candor-question-area-" ++ slideId
     , QuestionsArea.view questionsArea
-        |> Html.map QuestionsAreaMsg
+        |> Element.map QuestionsAreaMsg
     )
 
-view : Model -> Html Msg
+view : Model -> Element Msg
 view model =
-    Keyed.node "div"
-        [ ]
+    Keyed.column
+        [ Font.size 14
+        , centerX
+        , spacing 10
+        , padding 10
+        ]
         [ viewTinyMCEEditor model
         , viewSlideComponentsArea model
         , viewQuestionsArea model

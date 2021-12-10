@@ -3,8 +3,8 @@ module EditNew exposing (Model, Msg, init, update, view)
 import Api
 import Data.Project as Project
 import Edit
+import Element exposing (Element)
 import Flags exposing (Flags)
-import Html exposing (Html)
 import Http exposing (jsonBody, stringResolver)
 import Json.Decode exposing (Decoder, succeed, string)
 import Json.Decode.Pipeline exposing (required)
@@ -118,7 +118,7 @@ update msg ( { project } as model ) =
                     ( model, Cmd.none )
 
 
-view : Model -> Html Msg
+view : Model -> Element Msg
 view model =
     Edit.view model
-        |> Html.map EditMsg
+        |> Element.map EditMsg

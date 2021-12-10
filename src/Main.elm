@@ -8,12 +8,12 @@ import Delete
 import Edit
 import EditExisting
 import EditNew
+import Element exposing (centerX, column, Element, layout, padding, spacing)
+import Element.Font as Font
 import Flags exposing (Flags)
 import Generate
 import GenerateAlphabet
 import GenerateCourseWare
-import Html exposing (Html, div, h1, text)
-import Html.Attributes exposing (class)
 import Http exposing (Response, stringResolver)
 import Json.Decode exposing (Decoder, string)
 import Json.Decode.Pipeline exposing (required)
@@ -485,11 +485,13 @@ update msg model =
 
 ---- VIEW ---
 
-viewStandardHeader : String -> Html Msg
-viewStandardHeader header =
-    h1 [] [ text header ]
+viewLoading : Flags.Model -> Element Msg
+viewLoading flags =
+    Element.el
+        [ centerX ]
+        (Loading.iconElement flags.loadingPath)
 
-viewVersion : Model -> Html Msg
+viewVersion : Model -> Element Msg
 viewVersion { flags, serverVersion } =
     let
         theVersion =
@@ -500,72 +502,73 @@ viewVersion { flags, serverVersion } =
                 _ ->
                     "Candor V2 Server Version <Unknown> "
     in
-    div
-        [ ]
-        [ text ( theVersion ++ " Elm Client " ++ Flags.versionString flags ) ]
+    Element.el
+        [ centerX ]
+        ( Element.text ( theVersion ++ " Elm Client " ++ Flags.versionString flags ) )
 
-viewHeader : Model -> Html Msg
+viewHeader : Model -> Element Msg
 viewHeader ( { page } as model ) =
-    div
-        [ ]
+    column
+        [ spacing 10
+        , centerX
+        ]
         [
             case page of
                 Create createModel ->
                     Create.view createModel
-                        |> Html.map CreateMsg
+                        |> Element.map CreateMsg
 
                 Delete deleteModel ->
                     Delete.view deleteModel
-                        |> Html.map DeleteMsg
+                        |> Element.map DeleteMsg
 
                 Edit editModel ->
                     Edit.view editModel
-                        |> Html.map EditMsg
+                        |> Element.map EditMsg
 
                 Generate generateModel ->
                     Generate.view generateModel
-                        |> Html.map GenerateMsg
+                        |> Element.map GenerateMsg
 
                 Open openModel ->
                     Open.view openModel
-                        |> Html.map OpenMsg
+                        |> Element.map OpenMsg
 
                 NotFound ->
-                    div
-                        [ class "not-found" ]
-                        [ h1
-                            []
-                            [ text "Page Not Found" ]
+                    Element.el
+                        [ Font.size 30
+                        , Font.bold
                         ]
+                        ( Element.text "Page Not Found" )
 
                 Start startModel ->
                     Start.view startModel
-                        |> Html.map StartMsg
+                        |> Element.map StartMsg
             , viewVersion model
         ]
 
-viewContent : Model -> ( String, Html Msg )
+viewContent : Model -> ( String, Element Msg )
 viewContent ( { flags, languages, serverVersion } as model ) =
     let
         contents =
             case (languages, serverVersion) of
                 (Api.Loading _, _) ->
-                    div [] []
+                    Element.none
 
                 (_, Api.Loading _) ->
-                    div [] []
+                    Element.none
 
                 (Api.LoadingSlowly _, _) ->
-                    div [] [ ( Loading.icon flags.loadingPath ) ]
+                    viewLoading flags
 
                 (_, Api.LoadingSlowly _) ->
-                    div [] [ ( Loading.icon flags.loadingPath ) ]
+                    viewLoading flags
 
                 (Api.Failed, _) ->
-                    div [] [ Loading.error "languages" ]
+                    Loading.error "languages"
 
                 (_, Api.Failed) ->
-                    div [] [ Loading.error "server version" ]
+                    Loading.error "server version"
 
                 (Api.Loaded _, Api.Loaded _) ->
                     viewHeader model
@@ -580,7 +583,13 @@ view model =
             viewContent model
     in
     { title = title
-    , body = [ content ]
+    , body =
+        [
+            layout
+                [ Font.size 14
+                , padding 5 ]
+                content
+        ]
     }
 
 ---- PROGRAM ----

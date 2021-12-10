@@ -3,16 +3,16 @@ module Generate exposing (init, Model, Msg, update, view)
 import Api
 import Browser.Navigation as Navigation
 import Bytes exposing (Bytes)
+import Element exposing (centerX, column, Element, spacing)
+import Element.Input as Input
 import File.Download as Download
 import Flags exposing (Flags)
-import Html exposing (Html, button, div,  text)
-import Html.Attributes exposing (class)
-import Html.Events exposing (onClick)
 import Http exposing (bytesResolver)
 import LanguageHelpers
 import Loading
 import Routes
 import Task exposing (Task)
+import UIHelpers exposing (buttonAttributes)
 import Url.Builder as Builder
 
 -- MODEL
@@ -101,71 +101,66 @@ update msg model =
 
 -- VIEW
 
-viewActionButtons : Html Msg
+viewActionButtons : Element Msg
 viewActionButtons =
-    div
-        [ ]
-        [
-            button
-                [ onClick Cancel ]
-                [ text "Return to Home Screen" ]
-        ]
+    Input.button
+        buttonAttributes
+        { onPress = Just Cancel
+        , label = Element.text "Return to Home Screen"
+        }
 
-viewFailureMessage : String -> Html Msg
+viewFailureMessage : String -> Element Msg
 viewFailureMessage pn =
-    div
-        [ ]
-        [ text (pn ++ " failed to generate!") ]
+    Element.text (pn ++ " failed to generate!")
 
-viewFailure : String -> Html Msg
+viewFailure : String -> Element Msg
 viewFailure pn =
-    div
-        [ ]
+    column
+        [ spacing 10
+        , centerX
+        ]
         [ viewFailureMessage pn
         , viewActionButtons
         ]
 
-viewGeneratedMessage : String -> Html Msg
+viewGeneratedMessage : String -> Element Msg
 viewGeneratedMessage pn =
-    div
-        [ ]
-        [ text (pn ++ " is ready to be downloaded. Follow the browser's instructions.") ]
+    Element.text (pn ++ " is ready to be downloaded. Follow the browser's instructions.")
 
-viewGenerated : String -> Html Msg
+viewGenerated : String -> Element Msg
 viewGenerated pn =
-    div
-        [ ]
+    column
+        [ spacing 10
+        , centerX
+        ]
         [ viewGeneratedMessage pn
         , viewActionButtons
         ]
 
-viewGeneratingMessage : String -> Html Msg
+viewGeneratingMessage : String -> Element Msg
 viewGeneratingMessage pn =
-    div
-        [ ]
-        [ text (pn ++ " is being generated. Please wait...") ]
+    Element.text (pn ++ " is being generated. Please wait...")
 
-viewGenerating : String -> Html Msg
+viewGenerating : String -> Element Msg
 viewGenerating pn =
-    div
-        [ ]
-        [ viewGeneratingMessage pn ]
+    Element.el
+        [ centerX ]
+        (viewGeneratingMessage pn)
 
-viewGeneratingSlowly : String -> String -> Html Msg
+viewGeneratingSlowly : String -> String -> Element Msg
 viewGeneratingSlowly pn loadingPath =
-    div
-        [ ]
+    column
+        [ spacing 10
+        , centerX
+        ]
         [ viewGeneratingMessage pn
-        , div
-            [ ]
-            [ Loading.icon loadingPath ]
+        , Loading.iconElement loadingPath
         ]
 
-view : Model -> Html Msg
+view : Model -> Element Msg
 view { loadingPath, pn, status } =
-    div
-        [ class "generate-page" ]
-        [
+    let
+        element =
             case status of
                 Failure ->
                     viewFailure pn
@@ -178,5 +173,8 @@ view { loadingPath, pn, status } =
 
                 GeneratingSlowly ->
                     viewGeneratingSlowly pn loadingPath
-        ]
+    in
+    Element.el
+        [ ]
+        element
 

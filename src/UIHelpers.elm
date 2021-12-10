@@ -1,6 +1,6 @@
 module UIHelpers exposing (..)
 
-import Element exposing (Attribute, centerY, rgb255, padding)
+import Element exposing (Attribute, centerY, Column, Element, IndexedColumn, padding, rgb255)
 import Element.Background as Background
 import Element.Border as Border
 
@@ -25,4 +25,3 @@ buttonAttributes =
     , Border.color black
     , Border.width 1
     ]
-

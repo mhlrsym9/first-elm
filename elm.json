@@ -8,6 +8,7 @@
         "direct": {
             "NoRedInk/elm-json-decode-pipeline": "1.0.0",
             "PaackEng/elm-ui-dialog": "1.0.1",
+            "PaackEng/elm-ui-dropdown": "3.3.0",
             "TSFoster/elm-uuid": "4.1.0",
             "brian-watkins/elm-procedure": "1.1.0",
             "elm/browser": "1.0.2",

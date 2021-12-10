@@ -3,15 +3,15 @@ module Data.QuestionsArea exposing (encodeQuestionsArea, establishIndexes, init,
 import Data.ProjectHelpers as ProjectHelpers
 import Data.Question as Question
 import Dict exposing (Dict)
-import Element exposing (Element, layout)
-import Html exposing (button, div, h2, Html, table, text, tr)
-import Html.Attributes exposing (class, disabled)
-import Html.Events exposing (onClick)
+import Element exposing (centerX, Column, column, el, Element, fill, IndexedColumn, indexedTable, padding, spacing, table)
+import Element.Font as Font
+import Element.Input as Input
 import Json.Decode exposing (Decoder, int, succeed)
 import Json.Decode.Extra exposing (indexedList)
 import Json.Decode.Pipeline exposing (hardcoded, required)
 import Json.Encode as Encode
 import Task exposing (Task)
+import UIHelpers exposing (buttonAttributes)
 
 type alias Model =
     { questionIndex : Int
@@ -175,87 +175,138 @@ update msg ( { slideIndex, questions } as model ) =
 
 -- VIEW
 
-viewHeader : Html Msg
+viewHeader : Element Msg
 viewHeader =
-    h2
-        [ class "edit-page-questions-header" ]
-        [ text "Questions" ]
+    el
+        [ Font.size 24
+        , centerX
+        ]
+        (Element.text "Questions")
 
-viewActionButtons : Html Msg
+viewActionButtons : Element Msg
 viewActionButtons =
-    button
-        [ class "edit-page-questions-action-buttons"
-        , onClick Add
-        ]
-        [ text "Add Another Question" ]
+    Input.button
+        (centerX :: buttonAttributes)
+        { onPress = Just Add
+        , label = Element.text "Add Another Question"
+        }
 
-viewMoveQuestionTopButton : Int -> Html Msg
+prepareColumnButton : (Int -> Element Msg) -> Column Int Msg
+prepareColumnButton fnc =
+    { header = Element.text ""
+    , width = fill
+    , view =
+        \index ->
+            fnc index
+    }
+
+viewMoveQuestionTopButton : Int -> Element Msg
 viewMoveQuestionTopButton index =
-    button
-        [ onClick (Move index ProjectHelpers.Top)
-        , disabled (0 == index)
-        ]
-        [ text "Move Question to Top" ]
+    if (0 == index) then
+        Element.none
+    else
+        Input.button
+            buttonAttributes
+            { onPress = Just (Move index ProjectHelpers.Top)
+            , label = Element.text "Move Question to Top"
+            }
 
-viewMoveQuestionUpButton : Int -> Html Msg
+viewMoveQuestionUpButton : Int -> Element Msg
 viewMoveQuestionUpButton index =
-    button
-        [ onClick (Move index ProjectHelpers.Up)
-        , disabled (0 == index)
+    if (0 == index) then
+        Element.none
+    else
+        Input.button
+            buttonAttributes
+            { onPress = Just (Move index ProjectHelpers.Up)
+            , label = Element.text "Move Question Up"
+            }
+
+viewMoveQuestionDownButton : Int -> Int -> Element Msg
+viewMoveQuestionDownButton numberQuestions index =
+    if (index == (numberQuestions - 1)) then
+        Element.none
+    else
+        Input.button
+            buttonAttributes
+            { onPress = Just (Move index ProjectHelpers.Down)
+            , label = Element.text "Move Question Down"
+            }
+
+viewMoveQuestionBottomButton : Int -> Int -> Element Msg
+viewMoveQuestionBottomButton numberQuestions index =
+    if (index == (numberQuestions - 1)) then
+        Element.none
+    else
+        Input.button
+            buttonAttributes
+            { onPress = Just (Move index ProjectHelpers.Bottom)
+            , label = Element.text "Move Question to Bottom"
+            }
+
+viewDeleteButton : Int -> Int -> Element Msg
+viewDeleteButton numberQuestions index =
+    if (1 == numberQuestions) then
+        Element.none
+    else
+        Input.button
+            buttonAttributes
+            { onPress = Just (Delete index)
+            , label = Element.text "Delete This Question"
+            }
+
+viewQuestionsTableMoveButtons : Int -> Int -> Element Msg
+viewQuestionsTableMoveButtons numberQuestions index =
+    table
+        [ spacing 10 ]
+        { data = List.singleton index
+        , columns =
+            [ prepareColumnButton viewMoveQuestionTopButton
+            , prepareColumnButton viewMoveQuestionUpButton
+            , prepareColumnButton (viewMoveQuestionDownButton numberQuestions)
+            , prepareColumnButton (viewMoveQuestionBottomButton numberQuestions)
+            , prepareColumnButton (viewDeleteButton numberQuestions)
+            ]
+        }
+
+viewQuestionsTableColumnArea : Int -> Int -> Question.Model -> Element Msg
+viewQuestionsTableColumnArea numberQuestions index question =
+    column
+        [ ]
+        [ (viewQuestionsTableMoveButtons numberQuestions index)
+        , Question.view question
+            |> Element.map (QuestionMsg index)
         ]
-        [ text "Move Question Up" ]
 
-viewMoveQuestionDownButton : Int -> Int -> Html Msg
-viewMoveQuestionDownButton index numberQuestions =
-    button
-        [ onClick (Move index ProjectHelpers.Down)
-        , disabled ( index == (numberQuestions - 1) )
-        ]
-        [ text "Move Question Down" ]
+prepareQuestionsTableColumn : Int -> IndexedColumn Question.Model Msg
+prepareQuestionsTableColumn numberQuestions =
+    { header = Element.text ""
+    , width = fill
+    , view =
+        \index question ->
+            viewQuestionsTableColumnArea numberQuestions index question
+    }
 
-viewMoveQuestionBottomButton : Int -> Int -> Html Msg
-viewMoveQuestionBottomButton index numberQuestions =
-    button
-        [ onClick (Move index ProjectHelpers.Bottom)
-        , disabled ( index == (numberQuestions - 1) )
-        ]
-        [ text "Move Question to Bottom" ]
-
-viewDeleteButton : Int -> Int -> Html Msg
-viewDeleteButton index numberQuestions =
-    button
-        [ onClick (Delete index)
-        , disabled ( 1 == numberQuestions )
-        ]
-        [ text "Delete This Question" ]
-
-viewQuestionTableRowEntry : Int -> Int -> Question.Model -> List (Html Msg) -> List (Html Msg)
-viewQuestionTableRowEntry numberQuestions index question l =
-    let
-        entry =
-            tr
-                [ ]
-                [ viewMoveQuestionTopButton index
-                , viewMoveQuestionUpButton index
-                , viewMoveQuestionDownButton index numberQuestions
-                , viewMoveQuestionBottomButton index numberQuestions
-                , viewDeleteButton index numberQuestions
-                , Question.view question
-                    |> layout [ ]
-                    |> Html.map (QuestionMsg index)
-                ]
-    in
-    List.append l (List.singleton entry)
-
-viewQuestionsTable : Model -> Html Msg
+viewQuestionsTable : Model -> Element Msg
 viewQuestionsTable { questions } =
-    Dict.foldl (viewQuestionTableRowEntry (Dict.size questions)) [ ] questions
-        |> table [ class "edit-page-questions-table" ]
+    let
+        numberQuestions = Dict.size questions
+    in
+    indexedTable
+        [ spacing 10 ]
+        { data = Dict.values questions
+        , columns =
+            [ prepareQuestionsTableColumn numberQuestions ]
+        }
 
-view : Model -> Html Msg
+view : Model -> Element Msg
 view ( { questions } as model ) =
-    div
-        [ class "edit-page-questions-area" ]
+    column
+        [ Font.size 14
+        , padding 10
+        , spacing 10
+        , centerX
+        ]
         [ viewHeader
         , viewActionButtons
         , viewQuestionsTable model

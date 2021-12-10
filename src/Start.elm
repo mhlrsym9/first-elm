@@ -1,10 +1,10 @@
 module Start exposing (Model, Msg, init, update, view)
 
 import Browser.Navigation as Navigation
-import Html exposing (button, div, Html, text)
-import Html.Attributes exposing (class)
-import Html.Events exposing (onClick)
+import Element exposing (centerX, Element, row, spacing)
+import Element.Input as Input
 import Routes
+import UIHelpers exposing (buttonAttributes)
 
 -- MODEL
 
@@ -34,14 +34,20 @@ update msg model =
 
 -- VIEW
 
-view : Model -> Html Msg
+view : Model -> Element Msg
 view _ =
-    div
-        [ class "start-page" ]
-        [ button
-            [ onClick Create ]
-            [ text "Create new Powerslides Module" ]
-        , button
-            [ onClick Open ]
-            [ text "Open existing Powerslides Module" ]
+    row
+        [ centerX
+        , spacing 10
+        ]
+        [ Input.button
+            buttonAttributes
+            { onPress = Just Create
+            , label = Element.text "Create new Powerslides Module"
+            }
+        , Input.button
+            buttonAttributes
+            { onPress = Just Open
+            , label = Element.text "Open existing Powerslides Module"
+            }
         ]

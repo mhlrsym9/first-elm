@@ -1,14 +1,13 @@
-module Edit exposing (encodeProject, getProjectModel, Model, Modified(..), Msg(..), init, processDirtyMessage, storeSlideContents, update, view)
+module Edit exposing (encodeProject, Model, Modified(..), Msg(..), init, processDirtyMessage, storeSlideContents, update, view)
 
 import Api
 import Browser.Navigation as Navigation
 import Data.Project as Project
 import Dialog
-import Element exposing (Element, html, inFront, padding)
+import Element exposing (centerX, column, Element, el, inFront, padding, row, spaceEvenly, spacing, spacingXY)
+import Element.Font as Font
+import Element.Input as Input
 import Flags exposing (Flags)
-import Html exposing (Html, button, div, h1, text)
-import Html.Attributes exposing (class, disabled)
-import Html.Events exposing (onClick)
 import Http exposing (jsonBody, stringResolver)
 import Json.Decode exposing (Decoder, succeed, string)
 import Json.Decode.Pipeline exposing (required)
@@ -17,6 +16,7 @@ import LanguageHelpers
 import Loading
 import Routes
 import Task exposing (Task)
+import UIHelpers exposing (buttonAttributes)
 import Url.Builder as Builder
 
 -- MODEL
@@ -57,23 +57,6 @@ init { key, kl, ll, pn, model, flags } =
     , projectName = pn
     , showHomeScreenSaveWarning = False
     }
-
-getProjectModel : Model -> Maybe Project.Model
-getProjectModel model =
-    case model.project of
-        Clean a ->
-            case a of
-                Api.Loaded b ->
-                    Just b
-                _ ->
-                    Nothing
-
-        Dirty a ->
-            case a of
-                Api.Loaded b ->
-                    Just b
-                _ ->
-                    Nothing
 
 -- UPDATE
 
@@ -263,29 +246,26 @@ update msg ( { knownLanguage, learningLanguage, projectName, project, flags } as
         UpdateCurrentSlideContents _ ->
             ( model, Cmd.none )
 
-viewEditPageInfo : Model -> Html Msg
+viewEditPageInfo : Model -> Element Msg
 viewEditPageInfo { knownLanguage, learningLanguage, projectName } =
-    div
-        [ class "edit-page-info"]
-        [
-            div
-                [ class "edit-page-language-info" ]
-                [
-                    div
-                        [ ]
-                        [ text ( "Known Language: " ++ knownLanguage.displayName ) ]
-                    ,
-                    div
-                        [ ]
-                        [ text ( "Learning Language: " ++ learningLanguage.displayName ) ]
-                ]
-            ,
-            h1
-                [ class "edit-page-project-name" ]
-                [ text ( "Project Name: " ++ projectName ) ]
+    column
+        [ centerX
+        , spacing 10
+        ]
+        [ row
+            [ spacingXY 200 0 ]
+            [ Element.text ( "Known Language: " ++ knownLanguage.displayName )
+            , Element.text ( "Learning Language: " ++ learningLanguage.displayName )
+            ]
+        , el
+            [ Font.size 30
+            , Font.bold
+            , centerX
+            ]
+            (Element.text ( "Project Name: " ++ projectName ) )
         ]
 
-viewSaveButton : Model -> Html Msg
+viewSaveButton : Model -> Element Msg
 viewSaveButton { project } =
     let
         disabledState =
@@ -296,49 +276,44 @@ viewSaveButton { project } =
                 _ ->
                     True
     in
-    button
-        [ onClick (UpdateCurrentSlideContents Save)
-        , disabled disabledState ]
-        [ text "Save Project" ]
+    if (disabledState) then
+        Element.none
+    else
+        Input.button
+            buttonAttributes
+            { onPress = Just (UpdateCurrentSlideContents Save)
+            , label = Element.text "Save Project"
+            }
 
-viewCancelButton : Html Msg
+viewCancelButton : Element Msg
 viewCancelButton =
-    button
-        [ onClick Cancel ]
-        [ text "Return to Home Screen" ]
+    Input.button
+        buttonAttributes
+        { onPress = Just Cancel
+        , label = Element.text "Return to Home Screen" }
 
-viewActionButtons : Model -> Html Msg
+viewActionButtons : Model -> Element Msg
 viewActionButtons model =
-    div
-        [ class "edit-page-action-buttons" ]
+    row
+        [ spacing 10
+        , centerX
+        ]
         [ viewSaveButton model
         , viewCancelButton
         ]
 
-{-
 loadedMainView : Model -> Project.Model -> Element Msg
 loadedMainView model projectModel =
-    html
-        ( div
-            [ ]
-            [ viewEditPageInfo model
-            , viewActionButtons model
-            , Project.view projectModel
-                |> Html.map ProjectMsg
-            ])
--}
+    column
+        [ centerX ]
+        [ viewEditPageInfo model
+        , viewActionButtons model
+        , Project.view projectModel
+            |> Element.map ProjectMsg
+        ]
 
-loadedMainView : Model -> Project.Model -> List (Html Msg)
-loadedMainView model projectModel =
-    [ viewEditPageInfo model
-    , viewActionButtons model
-    , Project.view projectModel
-        |> Html.map ProjectMsg
-    ]
-
-loadedView : Model -> Project.Model -> List (Html Msg)
+loadedView : Model -> Project.Model -> Element Msg
 loadedView model projectModel =
-{-
     let
         config =
             { closeMessage = Just CloseDialog
@@ -357,32 +332,28 @@ loadedView model projectModel =
             else
                 Nothing
     in
-    [
-        Element.layout
-            [inFront (Dialog.view dialogConfig)]
-            (loadedMainView model projectModel)
-    ]
--}
-    loadedMainView model projectModel
+    el
+        [ inFront ( Dialog.view dialogConfig ) ]
+        (loadedMainView model projectModel)
 
-errorView : Model -> String -> List (Html Msg)
+errorView : Model -> String -> Element Msg
 errorView { projectName } errorStr =
-    [ div
-        [ ]
-        [ text ("Project " ++ projectName ++ errorStr) ]
-    , div
-        [ ]
-        [ viewCancelButton ]
-    ]
+    column
+        [ spaceEvenly
+        , centerX
+        ]
+        [ Element.text ("Project " ++ projectName ++ errorStr)
+        , viewCancelButton
+        ]
 
-loadingSlowlyView : Model -> List (Html Msg)
+loadingSlowlyView : Model -> Element Msg
 loadingSlowlyView { flags } =
-    [ Loading.icon flags.loadingPath ]
+    Loading.iconElement flags.loadingPath
 
-view : Model -> Html Msg
+view : Model -> Element Msg
 view ( {  project, projectName, flags } as model ) =
     let
-        elements =
+        element =
             case project of
                 Clean Api.Failed ->
                     errorView model " could not be created."
@@ -406,8 +377,14 @@ view ( {  project, projectName, flags } as model ) =
                     loadingSlowlyView model
 
                 Dirty (Api.LoadingSlowly projectModel) ->
-                    List.concat [(loadingSlowlyView model), (loadedView model projectModel)]
+                    column
+                        [ centerX ]
+                        [ (loadingSlowlyView model)
+                        , (loadedView model projectModel)
+                        ]
     in
-    div
-        [ class "edit-page" ]
-        elements
+    el
+        [ Font.size 14
+        , centerX
+        ]
+        element

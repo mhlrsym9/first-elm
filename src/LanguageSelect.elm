@@ -1,8 +1,9 @@
 module LanguageSelect exposing (getChosenDisplayLanguage, getChosenContentCodeString, init, Model, Msg(..), setAvailableLanguages, update, view)
 
-import Html exposing (Html, option, select, text)
-import Html.Attributes exposing (attribute, value)
-import Html.Events.Extra exposing (onChange)
+import Dropdown
+import Element exposing (clip, Element, fill, height, maximum, padding, paddingXY, px, rgb255, scrollbarY, spacing, width)
+import Element.Background as Background
+import Element.Border as Border
 import LanguageHelpers exposing (ContentCode, Language, Languages)
 import Task exposing (Task)
 
@@ -11,6 +12,7 @@ import Task exposing (Task)
 type alias Model =
     { chosenLanguage : Maybe Language
     , displayedLanguages : Languages
+    , dropdownState : Dropdown.State Language
     , languageModel : LanguageHelpers.Model
     }
 
@@ -28,6 +30,7 @@ initialData ( { languages } as model ) =
     in
     { chosenLanguage = chosenLanguage
     , displayedLanguages = languages
+    , dropdownState = Dropdown.init "dropdown"
     , languageModel = model
     }
 
@@ -63,52 +66,106 @@ setAvailableLanguages ccs { languageModel } =
 -- UPDATE
 
 type Msg
-    = UpdateLanguage String
+    = DropdownMsg (Dropdown.Msg Language)
+    | UpdateLanguage (Maybe Language)
     | UpdateLanguages Languages
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
     case ( msg, model ) of
-        ( UpdateLanguage language, { chosenLanguage, languageModel } ) ->
+        ( DropdownMsg subMsg, _ ) ->
             let
-                dictLanguage = LanguageHelpers.findLanguageFromContentCode languageModel language
+                ( state, cmd ) =
+                    Dropdown.update dropdownConfig subMsg model model.dropdownState
             in
-            case dictLanguage of
-                Just _ ->
-                    ( { model | chosenLanguage = dictLanguage }
-                    , Cmd.none
-                    )
+            ( { model | dropdownState = state }, cmd )
 
-                Nothing ->
-                    ( model, Cmd.none )
+        ( UpdateLanguage language, _ ) ->
+            ( { model | chosenLanguage = language }, Cmd.none )
 
         ( UpdateLanguages languages, _ ) ->
             ( { model | displayedLanguages = languages }
             , Cmd.none
             )
 
-viewOption : Language -> Html Msg
-viewOption language =
+dropdownConfig : Dropdown.Config Language Msg Model
+dropdownConfig =
     let
-        cc = LanguageHelpers.contentCodeStringFromLanguage language
-        displayName = LanguageHelpers.displayNameFromLanguage language
-    in
-    option
-        [ (attribute "key" cc)
-        , value cc
-        ]
-        [ text displayName ]
+        containerAttrs =
+            [ width ( px 300 ) ]
 
-view : Model -> Html Msg
-view { chosenLanguage, displayedLanguages } =
+        selectAttrs =
+            [ Border.width 1
+            , Border.rounded 5
+            , paddingXY 16 8
+            , spacing 10
+            , width fill
+            ]
+
+        searchAttrs =
+            [ Border.width 0
+            , padding 0
+            , width fill
+            ]
+
+        listAttrs =
+            [ Border.width 1
+            , Border.roundEach { topLeft = 0, topRight = 0, bottomLeft = 5, bottomRight = 5 }
+            , width fill
+            , clip
+            , scrollbarY
+            , height (fill |> maximum 200)
+            ]
+
+        itemToPrompt language =
+            Element.text (LanguageHelpers.displayNameFromLanguage language)
+
+        itemToText language =
+            LanguageHelpers.displayNameFromLanguage language
+
+        itemToElement selected highlighted language =
+            let
+                bgColor =
+                    if highlighted then
+                        rgb255 128 128 128
+
+                    else if selected then
+                        rgb255 100 100 100
+
+                    else
+                        rgb255 255 255 255
+            in
+            Element.el
+                [ Background.color bgColor
+                , padding 8
+                , spacing 10
+                , width fill
+                ]
+                ( Element.text (LanguageHelpers.displayNameFromLanguage language) )
+    in
+    Dropdown.filterable
+        { itemsFromModel = .displayedLanguages
+        , selectionFromModel = .chosenLanguage
+        , dropdownMsg = DropdownMsg
+        , onSelectMsg = UpdateLanguage
+        , itemToPrompt = itemToPrompt
+        , itemToElement = itemToElement
+        , itemToText = itemToText
+        }
+        |> Dropdown.withContainerAttributes containerAttrs
+        |> Dropdown.withPromptElement (Element.el [ ] (Element.text "Select language") )
+        |> Dropdown.withFilterPlaceholder "Type for option"
+        |> Dropdown.withSelectAttributes selectAttrs
+        |> Dropdown.withListAttributes listAttrs
+        |> Dropdown.withSearchAttributes searchAttrs
+
+view : Model -> Element Msg
+view ( { chosenLanguage, dropdownState } as model ) =
     case chosenLanguage of
         Nothing ->
-            text "Failure!"
+            Element.text "Failure!"
 
         Just { contentCode } ->
-            select
-                [ value (LanguageHelpers.fromContentCode contentCode)
-                , onChange UpdateLanguage
-                ]
-                (List.map viewOption displayedLanguages)
+            Dropdown.view dropdownConfig model dropdownState
+                |> Element.el [ ]
 

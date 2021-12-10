@@ -1,12 +1,12 @@
 module Create exposing (Model, Msg(..), init, update, view)
 
 import Browser.Navigation as Navigation
-import Html exposing (Html, button, div, input, label, text)
-import Html.Attributes exposing (class, disabled, type_, value)
-import Html.Events exposing (onClick, onInput)
+import Element exposing (centerX, column, Element, row, spacing)
+import Element.Input as Input
 import LanguageHelpers
 import LanguageSelect
 import Routes
+import UIHelpers exposing (buttonAttributes)
 import ViewHelpers
 
 -- MODEL
@@ -85,49 +85,53 @@ update msg model =
         ( Cancel, Success data _ _ ) ->
             ( model, Navigation.pushUrl data.navigationKey (Routes.routeToUrl Routes.Home) )
 
-
-isCreateButtonDisabled : Model -> Bool
-isCreateButtonDisabled model =
+viewCreateButton : Model -> Element Msg
+viewCreateButton model =
     case model of
         Success { projectName } klm llm ->
             let
                 knownLanguage = LanguageSelect.getChosenDisplayLanguage klm
                 learningLanguage = LanguageSelect.getChosenDisplayLanguage llm
+                isHidden =
+                    String.isEmpty projectName
+                    || String.isEmpty knownLanguage
+                    || String.isEmpty learningLanguage
             in
-                String.isEmpty projectName
-                || String.isEmpty knownLanguage
-                || String.isEmpty learningLanguage
+            if (isHidden) then
+                Element.none
+            else
+                Input.button
+                    buttonAttributes
+                    { onPress = Just Create
+                    , label = Element.text "Create"
+                    }
 
-view : Model -> Html Msg
+view : Model -> Element Msg
 view model =
     case model of
         Success { projectName } knownLanguage learningLanguage ->
-            div
-                [ class "create-page" ]
-                [ ViewHelpers.viewLanguageSelect "Known Language: " KnownLanguageMsg knownLanguage
-                , ViewHelpers.viewLanguageSelect "Learning Language: " LearningLanguageMsg learningLanguage
-                , div
-                    [ class "text-input" ]
-                    [ label
-                        [ ]
-                        [ text "Project Name: "
-                        , input
-                            [ type_ "text"
-                            , value projectName
-                            , onInput ProjectNameInput
-                            ]
-                            [ ]
-                        ]
-                    ]
-                , div
-                    [ ]
-                    [ button
-                        [ onClick Create
-                        , disabled (isCreateButtonDisabled model)
-                        ]
-                        [ text "Create" ]
-                    , button
-                        [ onClick Cancel ]
-                        [ text "Cancel" ]
-                    ]
-                 ]
+            column
+                [ centerX
+                , spacing 10
+                ]
+            [ ViewHelpers.viewLanguageSelect "Known Language " KnownLanguageMsg knownLanguage
+            , ViewHelpers.viewLanguageSelect "Learning Language " LearningLanguageMsg learningLanguage
+            , Input.text
+                [ ]
+                { onChange = ProjectNameInput
+                , text = projectName
+                , placeholder = Just (Input.placeholder [ ] ( Element.text "Please supply the name of this project" ) )
+                , label = Input.labelLeft [ ] (Element.text "Project Name:")
+                }
+            , row
+                [ centerX
+                , spacing 10
+                ]
+                [ viewCreateButton model
+                , Input.button
+                    buttonAttributes
+                    { onPress = Just Cancel
+                    , label = Element.text "Cancel"
+                    }
+                ]
+            ]

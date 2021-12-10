@@ -2,10 +2,9 @@ module Delete exposing (init, Model, Msg, update, view)
 
 import Api
 import Browser.Navigation as Navigation
+import Element exposing (centerX, column, Element, spacing)
+import Element.Input as Input
 import Flags exposing (Flags)
-import Html exposing (button, div, Html, text)
-import Html.Attributes exposing (class)
-import Html.Events exposing (onClick)
 import Http exposing (stringResolver)
 import Json.Decode exposing (Decoder, succeed, string)
 import Json.Decode.Pipeline exposing (required)
@@ -14,6 +13,7 @@ import Loading
 import ProjectAccess exposing (ProjectAccess)
 import Routes
 import Task exposing (Task)
+import UIHelpers exposing (buttonAttributes)
 import Url.Builder as Builder
 
 type Status
@@ -107,41 +107,45 @@ update msg model =
             in
             ( { model | status = updatedStatus } , Cmd.none )
 
-viewHomeButton : Html Msg
+viewHomeButton : Element Msg
 viewHomeButton =
-    div
-        [ ]
-        [
-            button
-                [ onClick Cancel ]
-                [ text "Return to Home Page" ]
-        ]
+    Input.button
+        buttonAttributes
+        { onPress = Just Cancel
+        , label = Element.text "Return to Home Page"
+        }
 
-view : Model -> Html Msg
+view : Model -> Element Msg
 view { flags, projectName, status } =
     case status of
         Deleted ->
-            div
-                [ class "delete-page-deleted" ]
-                [ text ( projectName ++ " successfully deleted." )
+            column
+                [ spacing 10
+                , centerX
+                ]
+                [ Element.text ( projectName ++ " successfully deleted." )
                 , viewHomeButton
                 ]
 
         Deleting ->
-            div
-                [ class "delete-page-deleting" ]
-                [ text ( projectName ++ " is being deleted..." ) ]
+            Element.el
+                [ centerX ]
+                ( Element.text ( projectName ++ " is being deleted..." ) )
 
         DeletingSlowly ->
-            div
-                [ class "delete-page-deleting-slowly" ]
-                [ text ( projectName ++ " is being deleted..." )
-                , (Loading.icon flags.loadingPath)
+            column
+                [ spacing 10
+                , centerX
+                ]
+                [ Element.text ( projectName ++ " is being deleted..." )
+                , Loading.iconElement flags.loadingPath
                 ]
 
         Failed ->
-            div
-                [ class "delete-page-failed" ]
-                [ text ( projectName ++ " could not be deleted." )
+            column
+                [ spacing 10
+                , centerX
+                ]
+                [ Element.text ( projectName ++ " could not be deleted." )
                 , viewHomeButton
                 ]

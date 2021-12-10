@@ -3,7 +3,7 @@ module EditExisting exposing (init, Msg, update)
 import Api
 import Data.Project as Project
 import Edit
-import Html exposing (Html)
+import Element exposing (Element)
 import Http exposing (stringResolver)
 import LanguageHelpers
 import Loading
@@ -121,7 +121,7 @@ update msg model =
             in
             ( updatedModel , Cmd.none )
 
-view : Model -> Html Msg
+view : Model -> Element Msg
 view model =
     Edit.view model
-        |> Html.map EditMsg
+        |> Element.map EditMsg
