@@ -56,10 +56,11 @@ postGenerationRequest { flags, imageRepository, kl, ll, pn } =
         kcc = LanguageHelpers.contentCodeStringFromLanguage kl
         lcc = LanguageHelpers.contentCodeStringFromLanguage ll
         url = Builder.relative [flags.candorUrl, "generate", imageRepository, kcc, lcc, pn] []
+        zip = List.singleton ( Http.header "Content-Type" "application/zip" )
     in
     Http.task
         { method = "GET"
-        , headers = []
+        , headers = zip
         , url = url
         , body = Http.emptyBody
         , resolver = bytesResolver ( Api.handleBytesResponse Ok )
@@ -104,7 +105,7 @@ update msg model =
 viewActionButtons : Element Msg
 viewActionButtons =
     Input.button
-        buttonAttributes
+        (centerX :: buttonAttributes)
         { onPress = Just Cancel
         , label = Element.text "Return to Home Screen"
         }
@@ -175,6 +176,6 @@ view { loadingPath, pn, status } =
                     viewGeneratingSlowly pn loadingPath
     in
     Element.el
-        [ ]
+        [ centerX ]
         element
 

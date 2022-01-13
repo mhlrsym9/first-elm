@@ -387,7 +387,7 @@ view model =
                         , Input.button
                             ( centerX :: buttonAttributes )
                             { onPress = Just Cancel
-                            , label = Element.text "Cancel"
+                            , label = Element.text "Return to Home Screen"
                             }
                         ]
 

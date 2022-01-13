@@ -110,7 +110,7 @@ update msg model =
 viewHomeButton : Element Msg
 viewHomeButton =
     Input.button
-        buttonAttributes
+        (centerX :: buttonAttributes)
         { onPress = Just Cancel
         , label = Element.text "Return to Home Page"
         }
