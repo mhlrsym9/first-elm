@@ -253,7 +253,9 @@ viewEditPageInfo { knownLanguage, learningLanguage, projectName } =
         , spacing 10
         ]
         [ row
-            [ spacingXY 200 0 ]
+            [ spacingXY 200 0
+            , centerX
+            ]
             [ Element.text ( "Known Language: " ++ knownLanguage.displayName )
             , Element.text ( "Learning Language: " ++ learningLanguage.displayName )
             ]
