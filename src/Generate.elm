@@ -76,7 +76,7 @@ type Msg =
 
 downloadGeneratedFile : Model -> Bytes -> Cmd msg
 downloadGeneratedFile { pn } response =
-    Download.bytes (pn ++ ".xml") "application/xml" response
+    Download.bytes (pn ++ ".zip") "application/zip" response
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
