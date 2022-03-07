@@ -56,7 +56,7 @@ postGenerationRequest { flags, imageRepository, kl, ll, pn } =
         kcc = LanguageHelpers.contentCodeStringFromLanguage kl
         lcc = LanguageHelpers.contentCodeStringFromLanguage ll
         url = Builder.relative [flags.candorUrl, "generate", imageRepository, kcc, lcc, pn] []
-        zip = List.singleton ( Http.header "Content-Type" "application/zip" )
+        zip = List.singleton ( Http.header "content-type" "application/zip" )
     in
     Http.task
         { method = "GET"

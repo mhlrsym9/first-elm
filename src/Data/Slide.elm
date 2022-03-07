@@ -4,7 +4,7 @@ import Api
 import Bytes exposing (Bytes)
 import Data.QuestionsArea as QuestionsArea
 import Dict exposing (Dict)
-import Element exposing (centerX, centerY, Column, column, el, Element, fill, html, padding, row, spacing, table, width)
+import Element exposing (centerX, centerY, Column, column, el, Element, fill, html, padding, paragraph, row, spacing, table, width)
 import Element.Font as Font
 import Element.Input as Input
 import Element.Keyed as Keyed
@@ -369,7 +369,7 @@ findValidMimeType ls =
 findMimeType : Dict String String -> Maybe String
 findMimeType d =
     let
-        c = Dict.get "Content-Type" d
+        c = Dict.get "content-type" d
     in
     case c of
         Just ct ->
@@ -708,7 +708,7 @@ viewComponentDescription { componentDescription } t =
         [ ]
         { onChange = ComponentDescriptionInput
         , text = componentDescription
-        , placeholder = Just (Input.placeholder [ ] (Element.text "Supply a desciption here."))
+        , placeholder = Just (Input.placeholder [ ] (Element.text "Supply a description here."))
         , label = Input.labelLeft [ ] (Element.text (toComponentDescription t))
         }
 
@@ -746,7 +746,7 @@ viewLoadComponentFromFile { componentDescription } componentType =
         Element.none
     else
         Input.button
-            buttonAttributes
+            ( centerX :: buttonAttributes )
             { onPress = toLoadComponentButtonMsg componentType
             , label = toLoadComponentButtonText componentType
             }
@@ -875,7 +875,9 @@ viewComponents model initParams componentType components =
                     "video"
         t =
             if (List.isEmpty components) then
-                Element.text ("No staged " ++ ct ++ " components")
+                paragraph
+                    [ centerX ]
+                    [ Element.text ("No staged " ++ ct ++ " components") ]
             else
                 table
                     [ spacing 10 ]
