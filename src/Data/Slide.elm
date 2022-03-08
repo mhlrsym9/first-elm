@@ -319,33 +319,38 @@ transferToServer { initParams } fileName fileMime componentBytes =
         , timeout = Nothing
         }
 
-addComponentToProject : Model -> (List String) -> ( (Result ProcedureError SlideComponent) -> Msg ) -> (Model, Cmd Msg)
-addComponentToProject ( { componentDescription, seeds } as model ) mimeTypes transferred =
+generateProcedure : Procedure ProcedureError (String, Bytes) Msg -> Model -> ( (Result ProcedureError SlideComponent) -> Msg ) -> (Model, Cmd Msg)
+generateProcedure p ( { componentDescription, seeds } as model ) transferred =
     let
         (uuid, updatedSeeds) = UUID.step seeds
+        fname = UUID.toString uuid
     in
     ( { model | componentDescription = "", componentUrl = "", seeds = updatedSeeds }
-    , Procedure.fetch (Select.file mimeTypes)
+    , p
         |> Procedure.andThen
-            (\f ->
-                File.toBytes f
+            (\(mimeType, bytes) ->
+                (transferToServer model fname mimeType bytes)
                     |> Procedure.fromTask
-                    |> Procedure.map
-                        (\bytes -> (f, bytes))
-            )
-        |> Procedure.andThen
-            (\(f, bytes) ->
-                let
-                    fileMime = (File.mime f)
-                    fname = UUID.toString uuid
-                in
-                (transferToServer model fname fileMime bytes)
-                    |> Procedure.fromTask
+                    |> Procedure.mapError (\err -> HttpError err)
             )
         |> Procedure.map ( \{ id } -> { description = componentDescription, id = id  } )
-        |> Procedure.mapError (\err -> HttpError err)
         |> Procedure.try ProcedureMsg transferred
     )
+
+addComponentToProject : Model -> (List String) -> ( (Result ProcedureError SlideComponent) -> Msg ) -> (Model, Cmd Msg)
+addComponentToProject model mimeTypes transferred =
+    let
+        preliminaryProcedure =
+            Procedure.fetch (Select.file mimeTypes)
+               |> Procedure.andThen
+                   (\f ->
+                       File.toBytes f
+                           |> Procedure.fromTask
+                           |> Procedure.map
+                               (\bytes -> (File.mime f, bytes))
+                   )
+    in
+    generateProcedure preliminaryProcedure model transferred
 
 fetchComponent : String -> Task Http.Error Api.BytesWithHeaders
 fetchComponent componentUrl =
@@ -383,35 +388,25 @@ findMimeType d =
             Nothing
 
 addUrlComponentToProject : Model -> ( (Result ProcedureError SlideComponent) -> Msg ) -> (Model, Cmd Msg)
-addUrlComponentToProject ( { componentDescription, componentUrl, seeds } as model ) transferred =
+addUrlComponentToProject ( { componentUrl } as model ) transferred =
     let
-        (uuid, updatedSeeds) = UUID.step seeds
-        fname = UUID.toString uuid
+        preliminaryProcedure =
+            fetchComponent componentUrl
+                |> Procedure.fromTask
+                |> Procedure.mapError (\err -> HttpError err)
+                |> Procedure.andThen
+                    (\{ bytes, headers } ->
+                        let
+                            theMimeType = findMimeType headers
+                        in
+                        case theMimeType of
+                            Just mt ->
+                                Procedure.provide (mt, bytes)
+                            _ ->
+                                Procedure.break NoMimeType
+                    )
     in
-    ( { model | componentDescription = "", componentUrl = "", seeds = updatedSeeds }
-    , fetchComponent componentUrl
-        |> Procedure.fromTask
-        |> Procedure.mapError (\err -> HttpError err)
-        |> Procedure.andThen
-            (\{ bytes, headers } ->
-                let
-                    mimeType = findMimeType headers
-                in
-                case mimeType of
-                    Just mt ->
-                        Procedure.provide (bytes, mt)
-                    _ ->
-                        Procedure.break NoMimeType
-            )
-        |> Procedure.andThen
-            (\(bytes, mt) ->
-                (transferToServer model fname mt bytes)
-                    |> Procedure.fromTask
-                    |> Procedure.mapError (\err -> HttpError err)
-            )
-        |> Procedure.map ( \{ id } -> { description = componentDescription, id = id } )
-        |> Procedure.try ProcedureMsg transferred
-    )
+    generateProcedure preliminaryProcedure model transferred
 
 makeProjectDirty : Cmd Msg
 makeProjectDirty =
