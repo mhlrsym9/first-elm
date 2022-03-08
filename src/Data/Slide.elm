@@ -4,6 +4,7 @@ import Api
 import Bytes exposing (Bytes)
 import Data.QuestionsArea as QuestionsArea
 import Dict exposing (Dict)
+import Dict.Extra
 import Element exposing (centerX, centerY, Column, column, el, Element, fill, html, padding, paragraph, row, spacing, table, width)
 import Element.Font as Font
 import Element.Input as Input
@@ -361,7 +362,7 @@ findValidMimeType : List String -> Maybe String
 findValidMimeType ls =
     case ls of
         s :: _ ->
-            List.Extra.find (\el -> el == s) ["image/jpeg" , "image/png", "audio/mpg", "video/mp4"]
+            List.Extra.find ( \el -> el == ( String.toLower s ) ) ["image/jpeg" , "image/png", "audio/mpg", "video/mp4"]
 
         _ ->
             Nothing
@@ -369,7 +370,7 @@ findValidMimeType ls =
 findMimeType : Dict String String -> Maybe String
 findMimeType d =
     let
-        c = Dict.get "content-type" d
+        c = Dict.get "content-type" (Dict.Extra.mapKeys String.toLower d)
     in
     case c of
         Just ct ->
@@ -521,7 +522,7 @@ update msg ( { images, procModel, questionsArea, sounds, videos } as model ) =
             )
 
         VideoRequested ->
-            addComponentToProject model ["video/mp4"] SoundTransferred
+            addComponentToProject model ["video/mp4"] VideoTransferred
 
         VideoTransferred result ->
             case result of
