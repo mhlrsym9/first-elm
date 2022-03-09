@@ -5,10 +5,11 @@ import Browser exposing (Document, UrlRequest)
 import Browser.Navigation as Navigation
 import Create
 import Delete
+import Dialog exposing (Config)
 import Edit
 import EditExisting
 import EditNew
-import Element exposing (centerX, column, Element, layout, padding, spacing)
+import Element exposing (centerX, column, Element, inFront, layout, padding, spacing)
 import Element.Font as Font
 import Flags exposing (Flags)
 import Generate
@@ -77,7 +78,8 @@ type alias Version =
     { version : String }
 
 type alias Model =
-    { flags : Flags.Model
+    { dialog : Maybe (Config Msg)
+    , flags : Flags.Model
     , languages : Api.Status LanguageHelpers.Model
     , navigationKey : Navigation.Key
     , page : Page
@@ -87,7 +89,8 @@ type alias Model =
 
 initialModel : Navigation.Key -> Flags -> Model
 initialModel navigationKey flags =
-    { flags = Flags.init flags
+    { dialog = Nothing
+    , flags = Flags.init flags
     , languages = Api.Loading LanguageHelpers.initEmptyLanguageHelpers
     , navigationKey = navigationKey
     , page = NotFound
@@ -375,6 +378,9 @@ update msg model =
 
         ( EditMsg editMsg, Edit editModel ) ->
             case editMsg of
+                Edit.ShowDialog config ->
+                    ( { model | dialog = Just (Dialog.map EditMsg config) }, Cmd.none )
+
                 Edit.UpdateCurrentSlideContents nextMsg ->
                     ( model, syncMceEditorProcedure (EditMsg nextMsg) )
 
@@ -577,7 +583,7 @@ viewContent ( { flags, languages, serverVersion } as model ) =
     ( "Candor HTML", contents )
 
 view : Model -> Document Msg
-view model =
+view ( { dialog } as model ) =
     let
         ( title, content ) =
             viewContent model
@@ -587,7 +593,9 @@ view model =
         [
             layout
                 [ Font.size 14
-                , padding 5 ]
+                , padding 5
+                , inFront (Dialog.view dialog)
+                ]
                 content
         ]
     }

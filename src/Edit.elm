@@ -3,7 +3,7 @@ module Edit exposing (encodeProject, Model, Modified(..), Msg(..), init, process
 import Api
 import Browser.Navigation as Navigation
 import Data.Project as Project
-import Dialog
+import Dialog exposing (Config)
 import Element exposing (centerX, column, Element, el, inFront, padding, row, spaceEvenly, spacing, spacingXY)
 import Element.Font as Font
 import Element.Input as Input
@@ -14,6 +14,7 @@ import Json.Decode.Pipeline exposing (required)
 import Json.Encode as Encode
 import LanguageHelpers
 import Loading
+import MessageHelpers exposing (sendCommandMessage)
 import Routes
 import Task exposing (Task)
 import UIHelpers exposing (buttonAttributes)
@@ -67,6 +68,7 @@ type Msg
     | PassedSlowSaveThreshold
     | ProjectMsg Project.Msg
     | Save
+    | ShowDialog (Config Msg)
     | UpdateCurrentSlideContents Msg
 
 saveProjectDecoder : Decoder SaveResult
@@ -140,26 +142,17 @@ pushCancel : Model -> Cmd Msg
 pushCancel model =
     Navigation.pushUrl model.navigationKey (Routes.routeToUrl Routes.Home)
 
+showDialog : Config Msg -> Cmd Msg
+showDialog config =
+    sendCommandMessage ( ShowDialog config )
+
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg ( { knownLanguage, learningLanguage, projectName, project, flags } as model ) =
     case msg of
         Cancel ->
-{-
-            case project of
-                Dirty p ->
-                    ( { model | showHomeScreenSaveWarning = True } , Cmd.none )
-
-                Clean p ->
-                    ( model, pushCancel model )
--}
             ( model, pushCancel model )
 
         CloseDialog ->
-            {-
-            ( { model | showHomeScreenSaveWarning = False }
-            , pushCancel model
-            )
-            -}
             ( model, Cmd.none )
 
         CompletedProjectSave result ->
@@ -202,8 +195,11 @@ update msg ( { knownLanguage, learningLanguage, projectName, project, flags } as
                         _ ->
                             ( model, Cmd.none )
 
+                Project.ShowDialog config ->
+                    ( model, showDialog (Dialog.map ProjectMsg config) )
+
                 Project.UpdateCurrentSlideContents nextMsg ->
-                    (model, Task.perform (always (UpdateCurrentSlideContents (ProjectMsg nextMsg) ) ) (Task.succeed ()))
+                    ( model, sendCommandMessage (UpdateCurrentSlideContents ( ProjectMsg nextMsg ) ) )
 
                 _ ->
                     case project of
@@ -242,6 +238,10 @@ update msg ( { knownLanguage, learningLanguage, projectName, project, flags } as
 
                 _ ->
                     ( model, Cmd.none )
+
+-- Handled by Main module
+        ShowDialog _ ->
+            ( model, Cmd.none )
 
         UpdateCurrentSlideContents _ ->
             ( model, Cmd.none )

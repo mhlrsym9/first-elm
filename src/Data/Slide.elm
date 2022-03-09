@@ -3,9 +3,12 @@ module Data.Slide exposing (encodeSlide, establishIndexes, init, InitParams, Mod
 import Api
 import Bytes exposing (Bytes)
 import Data.QuestionsArea as QuestionsArea
+import Dialog exposing (Config)
 import Dict exposing (Dict)
 import Dict.Extra
-import Element exposing (centerX, centerY, Column, column, el, Element, fill, html, padding, paragraph, row, spacing, table, width)
+import Element exposing (centerX, centerY, Column, column, el, Element, fill, html, padding, paragraph, px, row, spacing, table, width)
+import Element.Background as Background
+import Element.Border as Border
 import Element.Font as Font
 import Element.Input as Input
 import Element.Keyed as Keyed
@@ -20,11 +23,12 @@ import Json.Decode.Pipeline exposing (custom, hardcoded, optional, required)
 import Json.Encode as Encode
 import LanguageHelpers
 import List.Extra
+import MessageHelpers exposing (sendCommandMessage)
 import Procedure exposing (Procedure)
 import Procedure.Program
 import Random
 import Task exposing (Task)
-import UIHelpers exposing (buttonAttributes)
+import UIHelpers exposing (buttonAttributes, lightGrey, red, white)
 import Url.Builder as Builder
 import UUID exposing (Seeds)
 
@@ -68,6 +72,9 @@ type ComponentType
 type ProcedureError
     = HttpError Http.Error
     | NoMimeType
+
+type alias TransferResult = Result ProcedureError SlideComponent
+type alias TransferResultToMessage = TransferResult -> Msg
 
 type alias Model =
     { componentDescription : String
@@ -246,19 +253,21 @@ type Msg
     | ComponentUrlInput String
     | CopyUrl String
     | ImageRequested
-    | ImageTransferred (Result ProcedureError SlideComponent)
+    | ImageTransferred TransferResult
     | ImageUrlRequested
     | MakeDirty
+    | PrepareDialog ComponentType
     | ProcedureMsg (Procedure.Program.Msg Msg)
     | QuestionsAreaMsg QuestionsArea.Msg
+    | ShowDialog (Config Msg)
     | SoundRequested
-    | SoundTransferred (Result ProcedureError SlideComponent)
+    | SoundTransferred TransferResult
     | SoundUrlRequested
     | UpdateImagesVisibility Images Sounds Videos
     | UpdateSoundsVisibility Images Sounds Videos
     | UpdateVideosVisibility Images Sounds Videos
     | VideoRequested
-    | VideoTransferred (Result ProcedureError SlideComponent)
+    | VideoTransferred TransferResult
     | VideoUrlRequested
 
 storeSlideContents : String -> Model -> Model
@@ -319,8 +328,8 @@ transferToServer { initParams } fileName fileMime componentBytes =
         , timeout = Nothing
         }
 
-generateProcedure : Procedure ProcedureError (String, Bytes) Msg -> Model -> ( (Result ProcedureError SlideComponent) -> Msg ) -> (Model, Cmd Msg)
-generateProcedure p ( { componentDescription, seeds } as model ) transferred =
+generateTransferProcedure : Procedure ProcedureError (String, Bytes) Msg -> Model -> TransferResultToMessage -> (Model, Cmd Msg)
+generateTransferProcedure p ( { componentDescription, seeds } as model ) transferred =
     let
         (uuid, updatedSeeds) = UUID.step seeds
         fname = UUID.toString uuid
@@ -337,7 +346,7 @@ generateProcedure p ( { componentDescription, seeds } as model ) transferred =
         |> Procedure.try ProcedureMsg transferred
     )
 
-addComponentToProject : Model -> (List String) -> ( (Result ProcedureError SlideComponent) -> Msg ) -> (Model, Cmd Msg)
+addComponentToProject : Model -> (List String) -> TransferResultToMessage -> (Model, Cmd Msg)
 addComponentToProject model mimeTypes transferred =
     let
         preliminaryProcedure =
@@ -350,7 +359,7 @@ addComponentToProject model mimeTypes transferred =
                                (\bytes -> (File.mime f, bytes))
                    )
     in
-    generateProcedure preliminaryProcedure model transferred
+    generateTransferProcedure preliminaryProcedure model transferred
 
 fetchComponent : String -> Task Http.Error Api.BytesWithHeaders
 fetchComponent componentUrl =
@@ -387,7 +396,7 @@ findMimeType d =
         Nothing ->
             Nothing
 
-addUrlComponentToProject : Model -> ( (Result ProcedureError SlideComponent) -> Msg ) -> (Model, Cmd Msg)
+addUrlComponentToProject : Model -> TransferResultToMessage -> (Model, Cmd Msg)
 addUrlComponentToProject ( { componentUrl } as model ) transferred =
     let
         preliminaryProcedure =
@@ -406,11 +415,43 @@ addUrlComponentToProject ( { componentUrl } as model ) transferred =
                                 Procedure.break NoMimeType
                     )
     in
-    generateProcedure preliminaryProcedure model transferred
+    generateTransferProcedure preliminaryProcedure model transferred
 
 makeProjectDirty : Cmd Msg
 makeProjectDirty =
-    Task.perform ( always MakeDirty ) ( Task.succeed () )
+    sendCommandMessage MakeDirty
+
+prepareConfig : Model -> ComponentType -> Config Msg
+prepareConfig model ct =
+    { closeMessage = Nothing
+    , maskAttributes = [ ]
+    , containerAttributes =
+        [ Background.color white
+        , Border.rounded 5
+        , centerX
+        , centerY
+        , padding 10
+        , spacing 20
+        , width (px 400)
+        ]
+    , headerAttributes =
+        [ Font.size 24
+        , Font.color red
+        , padding 5
+        ]
+    , bodyAttributes =
+        [ Background.color lightGrey
+        , padding 20
+        ]
+    , footerAttributes = [ ]
+    , header = Just (Element.text "Supply URL to stage")
+    , body = Just ( viewLoadComponentFromUrl model ct )
+    , footer = Nothing
+    }
+
+showDialog : Config Msg -> Cmd Msg
+showDialog config =
+    sendCommandMessage (ShowDialog config)
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg ( { images, procModel, questionsArea, sounds, videos } as model ) =
@@ -449,6 +490,12 @@ update msg ( { images, procModel, questionsArea, sounds, videos } as model ) =
         MakeDirty ->
             ( model, Cmd.none )
 
+        PrepareDialog ct ->
+            let
+                config = prepareConfig model ct
+            in
+            ( model, showDialog config )
+
         ProcedureMsg procMsg ->
             Procedure.Program.update procMsg procModel
                 |> Tuple.mapFirst (\updated -> { model | procModel = updated })
@@ -466,6 +513,10 @@ update msg ( { images, procModel, questionsArea, sounds, videos } as model ) =
                     ( { model | questionsArea = updatedQuestionsAreaModel }
                     , Cmd.map QuestionsAreaMsg commands
                     )
+
+-- Handled in Project model
+        ShowDialog _ ->
+            (model, Cmd.none)
 
         SoundRequested ->
             addComponentToProject model ["audio/mpg"] SoundTransferred
@@ -708,8 +759,8 @@ viewComponentDescription { componentDescription } t =
         , label = Input.labelLeft [ ] (Element.text (toComponentDescription t))
         }
 
-toLoadComponentButtonText : ComponentType -> Element Msg
-toLoadComponentButtonText t =
+toSelectComponentFileButtonText : ComponentType -> Element Msg
+toSelectComponentFileButtonText t =
     let
         s =
             case t of
@@ -722,8 +773,8 @@ toLoadComponentButtonText t =
     in
     Element.text ("Select " ++ s ++ " file to stage")
 
-toLoadComponentButtonMsg : ComponentType -> Maybe Msg
-toLoadComponentButtonMsg t =
+toSelectComponentFileButtonMsg : ComponentType -> Maybe Msg
+toSelectComponentFileButtonMsg t =
     let
         m =
             case t of
@@ -743,8 +794,8 @@ viewLoadComponentFromFile { componentDescription } componentType =
     else
         Input.button
             ( centerX :: buttonAttributes )
-            { onPress = toLoadComponentButtonMsg componentType
-            , label = toLoadComponentButtonText componentType
+            { onPress = toSelectComponentFileButtonMsg componentType
+            , label = toSelectComponentFileButtonText componentType
             }
 
 toLoadUrlComponentLabelText : ComponentType -> String
@@ -806,6 +857,46 @@ viewLoadComponentFromUrl { componentDescription, componentUrl } componentType =
             , label = toLoadUrlComponentButtonText componentType
             }
         ]
+
+toSelectComponentUrlButtonText : ComponentType -> Element Msg
+toSelectComponentUrlButtonText t =
+    let
+        s =
+            case t of
+                Image ->
+                    "image"
+                Sound ->
+                    "sound"
+                Video ->
+                    "video"
+    in
+    Element.text ("Specify " ++ s ++ " URL to stage")
+
+toSelectComponentUrlButtonMsg : ComponentType -> Maybe Msg
+toSelectComponentUrlButtonMsg t =
+    Just (PrepareDialog t)
+
+viewLoadComponents : Model -> ComponentType -> Element Msg
+viewLoadComponents { componentDescription } componentType =
+    if (String.isEmpty componentDescription) then
+        Element.none
+    else
+        row
+            [ centerX
+            , spacing 10
+            ]
+            [
+                Input.button
+                    buttonAttributes
+                    { onPress = toSelectComponentFileButtonMsg componentType
+                    , label = toSelectComponentFileButtonText componentType
+                    }
+                , Input.button
+                    buttonAttributes
+                    { onPress = toSelectComponentUrlButtonMsg componentType
+                    , label = toSelectComponentUrlButtonText componentType
+                    }
+            ]
 
 viewStagedComponentsHeader : ComponentType -> Element Msg
 viewStagedComponentsHeader ct =
@@ -889,8 +980,9 @@ viewComponents model initParams componentType components =
         , spacing 10
         ]
         [ viewComponentDescription model componentType
-        , viewLoadComponentFromFile model componentType
-        , viewLoadComponentFromUrl model componentType
+        , viewLoadComponents model componentType
+--        , viewLoadComponentFromFile model componentType
+--        , viewLoadComponentFromUrl model componentType
         , viewStagedComponentsHeader componentType
         , t
         ]

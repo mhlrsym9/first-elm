@@ -2,6 +2,7 @@ module Data.Project exposing (encodeProject, establishIndexes, establishSlideUUI
 
 import Data.ProjectHelpers as ProjectHelpers
 import Data.Slide as Slide
+import Dialog exposing (Config)
 import Dict exposing (Dict)
 import Dict.Extra
 import Element exposing (centerX, column, Element, padding, row, spacing)
@@ -13,6 +14,7 @@ import Json.Decode.Extra exposing (indexedList)
 import Json.Decode.Pipeline exposing (hardcoded, required)
 import Json.Encode as Encode
 import LanguageHelpers
+import MessageHelpers exposing (sendCommandMessage)
 import Random
 import Task exposing (Task)
 import UIHelpers exposing (buttonAttributes)
@@ -129,6 +131,7 @@ type Msg =
     | InsertSlide ProjectHelpers.Direction
     | MakeDirty
     | Move ProjectHelpers.Direction
+    | ShowDialog (Config Msg)
     | SlideMsg Slide.Msg
     | UpdateCurrentSlideContents Msg
 
@@ -178,7 +181,11 @@ storeSlideContents slideContents ( { slideIndex, slides } as projectModel ) =
 
 makeProjectDirty : Cmd Msg
 makeProjectDirty =
-    Task.perform ( always MakeDirty ) ( Task.succeed () )
+    sendCommandMessage MakeDirty
+
+showDialog : Config Msg -> Cmd Msg
+showDialog config =
+    sendCommandMessage (ShowDialog config)
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg ( { slideIndex, slides } as model ) =
@@ -270,10 +277,17 @@ update msg ( { slideIndex, slides } as model ) =
                 , makeProjectDirty
             )
 
+-- Handled by Edit module
+        ShowDialog _ ->
+            (model, Cmd.none)
+
         SlideMsg slideMsg ->
             case slideMsg of
                 Slide.MakeDirty ->
                     ( model, makeProjectDirty )
+
+                Slide.ShowDialog config ->
+                    ( model, showDialog (Dialog.map SlideMsg config) )
 
                 _ ->
                     let
