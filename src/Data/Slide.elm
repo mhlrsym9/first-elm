@@ -69,6 +69,58 @@ type ComponentType
     | Sound
     | Video
 
+toBaseUrl : ComponentType -> String
+toBaseUrl t =
+    case t of
+        Image ->
+            "image"
+        Sound ->
+            "audio"
+        Video ->
+            "video"
+
+toText : ComponentType -> String
+toText t =
+    case t of
+        Image ->
+            "image"
+        Sound ->
+            "sound"
+        Video ->
+            "video"
+
+toCapitalizedText : ComponentType -> String
+toCapitalizedText t =
+    case t of
+        Image ->
+            "Image"
+        Sound ->
+            "Sound"
+        Video ->
+            "Video"
+
+toCapitalizedPluralText : ComponentType -> String
+toCapitalizedPluralText t =
+    case t of
+        Image ->
+            "Images"
+        Sound ->
+            "Sounds"
+        Video ->
+            "Videos"
+
+toMimeTypes : ComponentType -> List String
+toMimeTypes ct =
+    case ct of
+        Image ->
+            ["image/jpeg", "image/png"]
+
+        Sound ->
+            ["audio/mpg"]
+
+        Video ->
+            ["video/mp4"]
+
 type ProcedureError
     = HttpError Http.Error
     | NoMimeType
@@ -252,23 +304,16 @@ type Msg
     = ComponentDescriptionInput String
     | ComponentUrlInput String
     | CopyUrl String
-    | ImageRequested
-    | ImageTransferred TransferResult
-    | ImageUrlRequested
     | MakeDirty
+    | MediaRequested ComponentType
+    | MediaTransferred ComponentType TransferResult
+    | MediaUrlRequested ComponentType
     | PrepareDialog ComponentType
     | ProcedureMsg (Procedure.Program.Msg Msg)
     | QuestionsAreaMsg QuestionsArea.Msg
-    | ShowDialog (Config Msg)
-    | SoundRequested
-    | SoundTransferred TransferResult
-    | SoundUrlRequested
-    | UpdateImagesVisibility Images Sounds Videos
-    | UpdateSoundsVisibility Images Sounds Videos
-    | UpdateVideosVisibility Images Sounds Videos
-    | VideoRequested
-    | VideoTransferred TransferResult
-    | VideoUrlRequested
+    | ShowDialog (Maybe (Config Msg))
+    | UpdateVisibility Images Sounds Videos
+    | UrlCancelled ComponentType
 
 storeSlideContents : String -> Model -> Model
 storeSlideContents slideContents model =
@@ -346,9 +391,10 @@ generateTransferProcedure p ( { componentDescription, seeds } as model ) transfe
         |> Procedure.try ProcedureMsg transferred
     )
 
-addComponentToProject : Model -> (List String) -> TransferResultToMessage -> (Model, Cmd Msg)
-addComponentToProject model mimeTypes transferred =
+addComponentToProject : Model -> ComponentType-> (Model, Cmd Msg)
+addComponentToProject model ct =
     let
+        mimeTypes = toMimeTypes ct
         preliminaryProcedure =
             Procedure.fetch (Select.file mimeTypes)
                |> Procedure.andThen
@@ -359,7 +405,7 @@ addComponentToProject model mimeTypes transferred =
                                (\bytes -> (File.mime f, bytes))
                    )
     in
-    generateTransferProcedure preliminaryProcedure model transferred
+    generateTransferProcedure preliminaryProcedure model (MediaTransferred ct)
 
 fetchComponent : String -> Task Http.Error Api.BytesWithHeaders
 fetchComponent componentUrl =
@@ -421,35 +467,11 @@ makeProjectDirty : Cmd Msg
 makeProjectDirty =
     sendCommandMessage MakeDirty
 
-prepareConfig : Model -> ComponentType -> Config Msg
-prepareConfig model ct =
-    { closeMessage = Nothing
-    , maskAttributes = [ ]
-    , containerAttributes =
-        [ Background.color white
-        , Border.rounded 5
-        , centerX
-        , centerY
-        , padding 10
-        , spacing 20
-        , width (px 400)
-        ]
-    , headerAttributes =
-        [ Font.size 24
-        , Font.color red
-        , padding 5
-        ]
-    , bodyAttributes =
-        [ Background.color lightGrey
-        , padding 20
-        ]
-    , footerAttributes = [ ]
-    , header = Just (Element.text "Supply URL to stage")
-    , body = Just ( viewLoadComponentFromUrl model ct )
-    , footer = Nothing
-    }
+headerText : ComponentType -> String
+headerText ct =
+    "Supply " ++ ( toText ct ) ++ " URL to stage"
 
-showDialog : Config Msg -> Cmd Msg
+showDialog : Maybe (Config Msg) -> Cmd Msg
 showDialog config =
     sendCommandMessage (ShowDialog config)
 
@@ -465,36 +487,54 @@ update msg ( { images, procModel, questionsArea, sounds, videos } as model ) =
         CopyUrl _ ->
             ( model, Cmd.none )
 
-        ImageRequested ->
-            addComponentToProject model ["image/jpeg", "image/png"] ImageTransferred
+-- Handled in Project module
+        MakeDirty ->
+            ( model, Cmd.none )
 
-        ImageTransferred result ->
+        MediaRequested ct ->
+            addComponentToProject model ct
+
+        MediaTransferred ct result ->
             case result of
-                Ok image ->
-                    case images of
-                        VisibleImages l ->
-                            ( { model | images = VisibleImages ( image :: l ) }
-                            , makeProjectDirty
-                            )
+                Ok media ->
+                    case ct of
+                        Image ->
+                           case images of
+                                VisibleImages l ->
+                                    ( { model | images = VisibleImages ( media :: l ) }
+                                    , makeProjectDirty
+                                    )
 
-                        _ ->
-                            ( model, Cmd.none )
+                                _ ->
+                                    ( model, Cmd.none )
+
+                        Sound ->
+                            case sounds of
+                                VisibleSounds l ->
+                                    ( { model | sounds = VisibleSounds ( media :: l ) }, makeProjectDirty )
+
+                                _ ->
+                                    ( model, Cmd.none )
+
+                        Video ->
+                            case videos of
+                                VisibleVideos l ->
+                                    ( { model | videos = VisibleVideos ( media :: l ) }, makeProjectDirty )
+
+                                _ ->
+                                    ( model, Cmd.none )
 
                 Err _ ->
                     ( model, Cmd.none )
 
-        ImageUrlRequested ->
-            addUrlComponentToProject model ImageTransferred
-
--- Handled in Project module
-        MakeDirty ->
-            ( model, Cmd.none )
+        MediaUrlRequested ct ->
+            addUrlComponentToProject model (MediaTransferred ct)
 
         PrepareDialog ct ->
             let
                 config = prepareConfig model ct
             in
-            ( model, showDialog config )
+            ( model, showDialog ( Just config ) )
 
         ProcedureMsg procMsg ->
             Procedure.Program.update procMsg procModel
@@ -518,26 +558,7 @@ update msg ( { images, procModel, questionsArea, sounds, videos } as model ) =
         ShowDialog _ ->
             (model, Cmd.none)
 
-        SoundRequested ->
-            addComponentToProject model ["audio/mpg"] SoundTransferred
-
-        SoundTransferred result ->
-            case result of
-                Ok sound ->
-                    case sounds of
-                        VisibleSounds l ->
-                            ( { model | sounds = VisibleSounds ( sound :: l ) }, makeProjectDirty )
-
-                        _ ->
-                            ( model, Cmd.none )
-
-                Err _ ->
-                    ( model, Cmd.none )
-
-        SoundUrlRequested ->
-            addUrlComponentToProject model SoundTransferred
-
-        UpdateImagesVisibility updatedImages updatedSounds updatedVideos ->
+        UpdateVisibility updatedImages updatedSounds updatedVideos ->
             (
                 { model
                 | images = updatedImages
@@ -547,44 +568,8 @@ update msg ( { images, procModel, questionsArea, sounds, videos } as model ) =
                 , Cmd.none
             )
 
-        UpdateSoundsVisibility updatedImages updatedSounds updatedVideos ->
-            (
-                { model
-                | images = updatedImages
-                , sounds = updatedSounds
-                , videos = updatedVideos
-                }
-                , Cmd.none
-            )
-
-        UpdateVideosVisibility updatedImages updatedSounds updatedVideos ->
-            (
-                { model
-                | images = updatedImages
-                , sounds = updatedSounds
-                , videos = updatedVideos
-                }
-                , Cmd.none
-            )
-
-        VideoRequested ->
-            addComponentToProject model ["video/mp4"] VideoTransferred
-
-        VideoTransferred result ->
-            case result of
-                Ok video ->
-                    case videos of
-                        VisibleVideos l ->
-                            ( { model | videos = VisibleVideos ( video :: l ) }, makeProjectDirty )
-
-                        _ ->
-                            ( model, Cmd.none )
-
-                Err _ ->
-                    ( model, Cmd.none )
-
-        VideoUrlRequested ->
-            addUrlComponentToProject model VideoTransferred
+        UrlCancelled _ ->
+            ( { model | componentDescription = "" } , showDialog Nothing)
 
 -- VIEW
 
@@ -612,117 +597,47 @@ viewSlideComponentsHeader =
         ]
         ( Element.text "Slide Components" )
 
-viewSlideImages : Model -> Element Msg
-viewSlideImages { images, sounds, videos } =
-    let
-        updatedImages =
-            case images of
-                VisibleImages is ->
-                    HiddenImages is
-
-                HiddenImages is ->
-                    VisibleImages is
-
-        updatedSounds =
-            case sounds of
-                VisibleSounds ss ->
-                    HiddenSounds ss
-
-                HiddenSounds _ ->
-                    sounds
-
-        updatedVideos =
-            case videos of
-                VisibleVideos ss ->
-                    HiddenVideos ss
-
-                HiddenVideos _ ->
-                    videos
-
-    in
-    Input.button
-        buttonAttributes
-        { onPress = Just ( UpdateImagesVisibility updatedImages updatedSounds updatedVideos )
-        , label = Element.text "Manage Slide Images"
-        }
-
-viewSlideSounds : Model -> Element Msg
-viewSlideSounds { images, sounds, videos } =
-    let
-        updatedImages =
-            case images of
-                VisibleImages is ->
-                    HiddenImages is
-
-                HiddenImages _ ->
-                    images
-
-        updatedSounds =
-            case sounds of
-                VisibleSounds is ->
-                    HiddenSounds is
-
-                HiddenSounds is ->
-                    VisibleSounds is
-
-        updatedVideos =
-            case videos of
-                VisibleVideos ss ->
-                    HiddenVideos ss
-
-                HiddenVideos _ ->
-                    videos
-
-    in
-    Input.button
-        buttonAttributes
-        { onPress = Just ( UpdateSoundsVisibility updatedImages updatedSounds updatedVideos )
-        , label = Element.text "Manage Slide Sounds"
-        }
-
-viewSlideVideos : Model -> Element Msg
-viewSlideVideos { images, sounds, videos } =
-    let
-        updatedImages =
-            case images of
-                VisibleImages is ->
-                    HiddenImages is
-
-                HiddenImages _ ->
-                    images
-
-        updatedSounds =
-            case sounds of
-                VisibleSounds ss ->
-                    HiddenSounds ss
-
-                HiddenSounds _ ->
-                    sounds
-
-        updatedVideos =
-            case videos of
-                VisibleVideos is ->
-                    HiddenVideos is
-
-                HiddenVideos is ->
-                    VisibleVideos is
-
-    in
-    Input.button
-        buttonAttributes
-        { onPress = Just ( UpdateVideosVisibility updatedImages updatedSounds updatedVideos )
-        , label = Element.text "Manage Slide Videos"
-        }
-
-toBaseUrl : ComponentType -> String
-toBaseUrl t =
-    case t of
+generateUpdateVisibilityMessage : ComponentType -> Model -> Maybe Msg
+generateUpdateVisibilityMessage ct { images, sounds, videos } =
+    case ct of
         Image ->
-            "image"
+            case (images, sounds, videos) of
+                ( HiddenImages is, VisibleSounds ss, _ ) ->
+                    Just (UpdateVisibility (VisibleImages is) (HiddenSounds ss) videos)
+                ( HiddenImages is, _, VisibleVideos vs ) ->
+                    Just (UpdateVisibility (VisibleImages is) sounds (HiddenVideos vs))
+                ( HiddenImages is, HiddenSounds _, HiddenVideos _ ) ->
+                    Just (UpdateVisibility (VisibleImages is) sounds videos)
+                ( VisibleImages is, _, _ ) ->
+                    Just (UpdateVisibility (HiddenImages is) sounds videos)
         Sound ->
-            "audio"
+            case (images, sounds, videos) of
+                ( VisibleImages is, HiddenSounds ss, _ ) ->
+                    Just (UpdateVisibility (HiddenImages is) (VisibleSounds ss) videos)
+                ( _, HiddenSounds ss, VisibleVideos vs ) ->
+                    Just (UpdateVisibility images (VisibleSounds ss) (HiddenVideos vs))
+                ( HiddenImages _, HiddenSounds ss, HiddenVideos _ ) ->
+                    Just (UpdateVisibility images (VisibleSounds ss) videos)
+                ( _, VisibleSounds ss, _ ) ->
+                    Just (UpdateVisibility images (HiddenSounds ss) videos)
         Video ->
-            "video"
+            case (images, sounds, videos) of
+                ( VisibleImages is, _, HiddenVideos vs ) ->
+                    Just (UpdateVisibility (HiddenImages is) sounds (VisibleVideos vs))
+                ( _, VisibleSounds ss, HiddenVideos vs ) ->
+                    Just (UpdateVisibility images (HiddenSounds ss) (VisibleVideos vs))
+                ( HiddenImages _, HiddenSounds _, HiddenVideos vs ) ->
+                    Just (UpdateVisibility images sounds (VisibleVideos vs))
+                ( _, _, VisibleVideos vs ) ->
+                    Just (UpdateVisibility images sounds (HiddenVideos vs))
+
+viewSlideMediaElements : ComponentType -> Model -> Element Msg
+viewSlideMediaElements ct model =
+    Input.button
+        buttonAttributes
+        { onPress = generateUpdateVisibilityMessage ct model
+        , label = Element.text ("Manage Slide " ++ (toCapitalizedPluralText ct))
+        }
 
 viewSlideComponentButtons : Model -> Element Msg
 viewSlideComponentButtons model =
@@ -730,24 +645,14 @@ viewSlideComponentButtons model =
         [ centerX
         , spacing 10
         ]
-        [ viewSlideImages model
-        , viewSlideSounds model
-        , viewSlideVideos model
+        [ viewSlideMediaElements Image model
+        , viewSlideMediaElements Sound model
+        , viewSlideMediaElements Video model
         ]
 
 toComponentDescription : ComponentType -> String
 toComponentDescription t =
-    let
-        header =
-            case t of
-                Image ->
-                    "image"
-                Sound ->
-                    "sound"
-                Video ->
-                    "video"
-    in
-    "Description of " ++ header ++ " to stage:"
+    "Description of " ++ (toText t) ++ " to stage:"
 
 viewComponentDescription : Model -> ComponentType -> Element Msg
 viewComponentDescription { componentDescription } t =
@@ -761,120 +666,11 @@ viewComponentDescription { componentDescription } t =
 
 toSelectComponentFileButtonText : ComponentType -> Element Msg
 toSelectComponentFileButtonText t =
-    let
-        s =
-            case t of
-                Image ->
-                    "image"
-                Sound ->
-                    "sound"
-                Video ->
-                    "video"
-    in
-    Element.text ("Select " ++ s ++ " file to stage")
-
-toSelectComponentFileButtonMsg : ComponentType -> Maybe Msg
-toSelectComponentFileButtonMsg t =
-    let
-        m =
-            case t of
-                Image ->
-                    ImageRequested
-                Sound ->
-                    SoundRequested
-                Video ->
-                    VideoRequested
-    in
-    Just m
-
-viewLoadComponentFromFile : Model -> ComponentType -> Element Msg
-viewLoadComponentFromFile { componentDescription } componentType =
-    if (String.isEmpty componentDescription) then
-        Element.none
-    else
-        Input.button
-            ( centerX :: buttonAttributes )
-            { onPress = toSelectComponentFileButtonMsg componentType
-            , label = toSelectComponentFileButtonText componentType
-            }
-
-toLoadUrlComponentLabelText : ComponentType -> String
-toLoadUrlComponentLabelText t =
-    let
-        s =
-            case t of
-                Image ->
-                    "image"
-                Sound ->
-                    "sound"
-                Video ->
-                    "video"
-    in
-    "URL of " ++ s ++ " to stage:"
-
-toLoadUrlComponentButtonText : ComponentType -> Element Msg
-toLoadUrlComponentButtonText t =
-    let
-        s =
-            case t of
-                Image ->
-                    "image"
-                Sound ->
-                    "sound"
-                Video ->
-                    "video"
-    in
-    Element.text ("Stage " ++ s ++ " on server")
-
-toLoadUrlComponentButtonMsg : ComponentType -> Maybe Msg
-toLoadUrlComponentButtonMsg t =
-    let
-        m =
-            case t of
-                Image ->
-                    ImageUrlRequested
-                Sound ->
-                    SoundUrlRequested
-                Video ->
-                    VideoUrlRequested
-    in
-    Just m
-
-viewLoadComponentFromUrl : Model -> ComponentType -> Element Msg
-viewLoadComponentFromUrl { componentDescription, componentUrl } componentType =
-    row
-        [ spacing 10 ]
-        [ Input.text
-            [ ]
-            { onChange = ComponentUrlInput
-            , text = componentUrl
-            , placeholder = Just (Input.placeholder [ ] (Element.text "Supply a valid URL here."))
-            , label = Input.labelLeft [ ] (Element.text ( toLoadUrlComponentLabelText componentType ))
-            }
-        , Input.button
-            buttonAttributes
-            { onPress = toLoadUrlComponentButtonMsg componentType
-            , label = toLoadUrlComponentButtonText componentType
-            }
-        ]
+    Element.text ("Select " ++ (toText t) ++ " file to stage")
 
 toSelectComponentUrlButtonText : ComponentType -> Element Msg
 toSelectComponentUrlButtonText t =
-    let
-        s =
-            case t of
-                Image ->
-                    "image"
-                Sound ->
-                    "sound"
-                Video ->
-                    "video"
-    in
-    Element.text ("Specify " ++ s ++ " URL to stage")
-
-toSelectComponentUrlButtonMsg : ComponentType -> Maybe Msg
-toSelectComponentUrlButtonMsg t =
-    Just (PrepareDialog t)
+    Element.text ("Specify " ++ (toText t) ++ " URL to stage")
 
 viewLoadComponents : Model -> ComponentType -> Element Msg
 viewLoadComponents { componentDescription } componentType =
@@ -888,33 +684,23 @@ viewLoadComponents { componentDescription } componentType =
             [
                 Input.button
                     buttonAttributes
-                    { onPress = toSelectComponentFileButtonMsg componentType
+                    { onPress = Just (MediaRequested componentType)
                     , label = toSelectComponentFileButtonText componentType
                     }
                 , Input.button
                     buttonAttributes
-                    { onPress = toSelectComponentUrlButtonMsg componentType
+                    { onPress = Just (PrepareDialog componentType)
                     , label = toSelectComponentUrlButtonText componentType
                     }
             ]
 
 viewStagedComponentsHeader : ComponentType -> Element Msg
 viewStagedComponentsHeader ct =
-    let
-        s =
-            case ct of
-                Image ->
-                    "Image"
-                Sound ->
-                    "Sound"
-                Video ->
-                    "Video"
-    in
     el
         [ Font.size 24
         , centerX
         ]
-        ( Element.text ("Staged " ++ s ++ " Components") )
+        ( Element.text ("Staged " ++ (toCapitalizedText ct) ++ " Components") )
 
 prepareDescription : Column SlideComponent Msg
 prepareDescription =
@@ -952,19 +738,11 @@ prepareCopyUrlButton { flags, knownLanguage, learningLanguage, projectName } com
 viewComponents : Model -> InitParams -> ComponentType -> List SlideComponent -> Element Msg
 viewComponents model initParams componentType components =
     let
-        ct =
-            case componentType of
-                Image ->
-                    "image"
-                Sound ->
-                    "sound"
-                Video ->
-                    "video"
         t =
             if (List.isEmpty components) then
                 paragraph
                     [ centerX ]
-                    [ Element.text ("No staged " ++ ct ++ " components") ]
+                    [ Element.text ("No staged " ++ (toText componentType) ++ " components") ]
             else
                 table
                     [ spacing 10 ]
@@ -981,8 +759,6 @@ viewComponents model initParams componentType components =
         ]
         [ viewComponentDescription model componentType
         , viewLoadComponents model componentType
---        , viewLoadComponentFromFile model componentType
---        , viewLoadComponentFromUrl model componentType
         , viewStagedComponentsHeader componentType
         , t
         ]
@@ -1034,3 +810,69 @@ view model =
         , viewSlideComponentsArea model
         , viewQuestionsArea model
         ]
+
+-- Retreive media URL dialog
+
+toLoadUrlComponentLabelText : ComponentType -> String
+toLoadUrlComponentLabelText t =
+    "URL of " ++ (toText t) ++ " to stage:"
+
+viewLoadComponentFromUrl : Model -> ComponentType -> Element Msg
+viewLoadComponentFromUrl { componentDescription, componentUrl } componentType =
+    Input.text
+        [ ]
+        { onChange = ComponentUrlInput
+        , text = componentUrl
+        , placeholder = Just (Input.placeholder [ ] (Element.text "Supply a valid URL here."))
+        , label = Input.labelHidden ( toLoadUrlComponentLabelText componentType )
+        }
+
+toLoadUrlComponentButtonText : ComponentType -> Element Msg
+toLoadUrlComponentButtonText t =
+    Element.text ("Stage " ++ (toText t) ++ " on server")
+
+viewLoadComponentFromUrlFooter : ComponentType -> Element Msg
+viewLoadComponentFromUrlFooter ct =
+    row
+        [ spacing 10 ]
+        [ Input.button
+            buttonAttributes
+            { onPress = Just (MediaUrlRequested ct)
+            , label = toLoadUrlComponentButtonText ct
+            }
+        , Input.button
+            buttonAttributes
+            { onPress = Just (UrlCancelled ct)
+            , label = Element.text "Cancel"
+            }
+        ]
+
+prepareConfig : Model -> ComponentType -> Config Msg
+prepareConfig model ct =
+    { closeMessage = Nothing
+    , maskAttributes = [ ]
+    , containerAttributes =
+        [ Background.color white
+        , Border.rounded 5
+        , centerX
+        , centerY
+        , padding 10
+        , spacing 20
+        , width (px 400)
+        ]
+    , headerAttributes =
+        [ Font.size 24
+        , Font.color red
+        , padding 5
+        ]
+    , bodyAttributes =
+        [ Background.color lightGrey
+        , padding 20
+        ]
+    , footerAttributes =
+        [ padding 5 ]
+    , header = Just ( Element.text ( headerText ct ) )
+    , body = Just ( viewLoadComponentFromUrl model ct )
+    , footer = Just ( viewLoadComponentFromUrlFooter ct )
+    }
+

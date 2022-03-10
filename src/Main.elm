@@ -379,7 +379,12 @@ update msg model =
         ( EditMsg editMsg, Edit editModel ) ->
             case editMsg of
                 Edit.ShowDialog config ->
-                    ( { model | dialog = Just (Dialog.map EditMsg config) }, Cmd.none )
+                    case config of
+                        Just c ->
+                            ( { model | dialog = Just (Dialog.map EditMsg c) }, Cmd.none )
+
+                        Nothing ->
+                            ( { model | dialog = Nothing }, Cmd.none )
 
                 Edit.UpdateCurrentSlideContents nextMsg ->
                     ( model, syncMceEditorProcedure (EditMsg nextMsg) )

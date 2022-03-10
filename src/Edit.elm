@@ -68,7 +68,7 @@ type Msg
     | PassedSlowSaveThreshold
     | ProjectMsg Project.Msg
     | Save
-    | ShowDialog (Config Msg)
+    | ShowDialog ( Maybe (Config Msg) )
     | UpdateCurrentSlideContents Msg
 
 saveProjectDecoder : Decoder SaveResult
@@ -142,7 +142,7 @@ pushCancel : Model -> Cmd Msg
 pushCancel model =
     Navigation.pushUrl model.navigationKey (Routes.routeToUrl Routes.Home)
 
-showDialog : Config Msg -> Cmd Msg
+showDialog : Maybe (Config Msg) -> Cmd Msg
 showDialog config =
     sendCommandMessage ( ShowDialog config )
 
@@ -196,7 +196,12 @@ update msg ( { knownLanguage, learningLanguage, projectName, project, flags } as
                             ( model, Cmd.none )
 
                 Project.ShowDialog config ->
-                    ( model, showDialog (Dialog.map ProjectMsg config) )
+                    case config of
+                        Just c ->
+                            ( model, showDialog ( Just (Dialog.map ProjectMsg c) ) )
+
+                        Nothing ->
+                            ( model, showDialog Nothing )
 
                 Project.UpdateCurrentSlideContents nextMsg ->
                     ( model, sendCommandMessage (UpdateCurrentSlideContents ( ProjectMsg nextMsg ) ) )

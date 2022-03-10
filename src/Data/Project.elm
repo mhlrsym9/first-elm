@@ -16,7 +16,6 @@ import Json.Encode as Encode
 import LanguageHelpers
 import MessageHelpers exposing (sendCommandMessage)
 import Random
-import Task exposing (Task)
 import UIHelpers exposing (buttonAttributes)
 import UUID exposing (Seeds)
 
@@ -131,7 +130,7 @@ type Msg =
     | InsertSlide ProjectHelpers.Direction
     | MakeDirty
     | Move ProjectHelpers.Direction
-    | ShowDialog (Config Msg)
+    | ShowDialog ( Maybe (Config Msg) )
     | SlideMsg Slide.Msg
     | UpdateCurrentSlideContents Msg
 
@@ -183,7 +182,7 @@ makeProjectDirty : Cmd Msg
 makeProjectDirty =
     sendCommandMessage MakeDirty
 
-showDialog : Config Msg -> Cmd Msg
+showDialog : Maybe (Config Msg) -> Cmd Msg
 showDialog config =
     sendCommandMessage (ShowDialog config)
 
@@ -287,7 +286,12 @@ update msg ( { slideIndex, slides } as model ) =
                     ( model, makeProjectDirty )
 
                 Slide.ShowDialog config ->
-                    ( model, showDialog (Dialog.map SlideMsg config) )
+                    case config of
+                        Just c ->
+                            ( model, showDialog (Just (Dialog.map SlideMsg c) ) )
+
+                        Nothing ->
+                            ( model, showDialog Nothing)
 
                 _ ->
                     let
