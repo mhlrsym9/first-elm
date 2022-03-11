@@ -6,7 +6,7 @@ import Data.QuestionsArea as QuestionsArea
 import Dialog exposing (Config)
 import Dict exposing (Dict)
 import Dict.Extra
-import Element exposing (centerX, centerY, Column, column, el, Element, fill, html, padding, paragraph, px, row, spacing, table, width)
+import Element exposing (alignRight, centerX, centerY, Column, column, el, Element, fill, html, padding, paragraph, px, row, spacing, table, width)
 import Element.Background as Background
 import Element.Border as Border
 import Element.Font as Font
@@ -128,11 +128,17 @@ type ProcedureError
 type alias TransferResult = Result ProcedureError SlideComponent
 type alias TransferResultToMessage = TransferResult -> Msg
 
+type Position
+    = Left
+    | Center
+    | Right
+
 type alias Model =
     { componentDescription : String
     , componentUrl : String
     , images : Images
     , initParams : InitParams
+    , mediaPosition : Position
     , procModel : Procedure.Program.Model Msg
     , questionsArea : QuestionsArea.Model
     , seeds : Seeds
@@ -185,6 +191,7 @@ slideDecoder ( { flags } as initParams ) =
         |> hardcoded ""
         |> optional "images" imagesAreaDecoder (HiddenImages [])
         |> hardcoded initParams
+        |> hardcoded Center
         |> hardcoded Procedure.Program.init
         |> required "questionsarea" QuestionsArea.questionsAreaDecoder
         |> hardcoded ( initialSeeds flags )
@@ -272,6 +279,7 @@ init ( { flags } as initParams ) slideId slideIndex =
     , componentUrl = ""
     , images = HiddenImages [ ]
     , initParams = initParams
+    , mediaPosition = Center
     , procModel = Procedure.Program.init
     , questionsArea = questionsArea
     , seeds = initialSeeds flags
@@ -301,8 +309,9 @@ establishIndexes slideIndex ( { questionsArea } as model ) =
 -- UPDATE
 
 type Msg
-    = ComponentDescriptionInput String
-    | ComponentUrlInput String
+    = ChoosePosition ComponentType Position
+    | ComponentDescriptionInput String
+    | ComponentUrlInput ComponentType String
     | CopyUrl String
     | MakeDirty
     | MediaRequested ComponentType
@@ -478,11 +487,22 @@ showDialog config =
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg ( { images, procModel, questionsArea, sounds, videos } as model ) =
     case msg of
+        ChoosePosition ct position ->
+            let
+                updatedModel = { model | mediaPosition = position }
+                config = prepareConfig updatedModel ct
+            in
+            ( updatedModel, showDialog ( Just config ) )
+
         ComponentDescriptionInput s ->
             ( { model | componentDescription = s }, Cmd.none )
 
-        ComponentUrlInput s ->
-            ( { model | componentUrl = s }, Cmd.none )
+        ComponentUrlInput ct s ->
+            let
+                updatedModel = { model | componentUrl = s }
+                config = prepareConfig updatedModel ct
+            in
+            ( updatedModel, showDialog ( Just config ) )
 
         CopyUrl _ ->
             ( model, Cmd.none )
@@ -818,14 +838,30 @@ toLoadUrlComponentLabelText t =
     "URL of " ++ (toText t) ++ " to stage:"
 
 viewLoadComponentFromUrl : Model -> ComponentType -> Element Msg
-viewLoadComponentFromUrl { componentDescription, componentUrl } componentType =
-    Input.text
-        [ ]
-        { onChange = ComponentUrlInput
-        , text = componentUrl
-        , placeholder = Just (Input.placeholder [ ] (Element.text "Supply a valid URL here."))
-        , label = Input.labelHidden ( toLoadUrlComponentLabelText componentType )
-        }
+viewLoadComponentFromUrl { componentUrl, mediaPosition } componentType =
+    column
+        [ centerX ]
+        [ Input.text
+            [ ]
+            { onChange = ComponentUrlInput componentType
+            , text = componentUrl
+            , placeholder = Just (Input.placeholder [ ] (Element.text "Supply a valid URL here."))
+            , label = Input.labelHidden ( toLoadUrlComponentLabelText componentType )
+            }
+        , Input.radioRow
+            [ padding 10
+            , spacing 20
+            ]
+            { onChange = ChoosePosition componentType
+            , selected = Just mediaPosition
+            , label = Input.labelLeft [ ] (Element.text "Position")
+            , options =
+                [ Input.option Left (Element.text "Left")
+                , Input.option Center (Element.text "Center")
+                , Input.option Right (Element.text "Right")
+                ]
+            }
+        ]
 
 toLoadUrlComponentButtonText : ComponentType -> Element Msg
 toLoadUrlComponentButtonText t =
@@ -834,7 +870,9 @@ toLoadUrlComponentButtonText t =
 viewLoadComponentFromUrlFooter : ComponentType -> Element Msg
 viewLoadComponentFromUrlFooter ct =
     row
-        [ spacing 10 ]
+        [ spacing 10
+        , alignRight
+        ]
         [ Input.button
             buttonAttributes
             { onPress = Just (MediaUrlRequested ct)
