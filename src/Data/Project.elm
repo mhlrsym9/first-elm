@@ -1,4 +1,4 @@
-module Data.Project exposing (encodeProject, establishIndexes, establishSlideUUIDs, projectDecoder, init, initEmptyProject, initNewProject, Model, Msg(..), storeSlideContents, update, view)
+module Data.Project exposing (encodeProject, establishIndexes, establishSlideUUIDs, projectDecoder, init, initEmptyProject, initNewProject, Model, Msg(..), storeSlideContents, update, updateProject, view)
 
 import Data.ProjectHelpers as ProjectHelpers
 import Data.Slide as Slide
@@ -121,6 +121,26 @@ establishSlideUUIDs ( { seeds, slides } as model ) =
         (updatedSlides, updatedSeeds) = Dict.foldl establishSlideUUID (Dict.empty, seeds) slides
     in
     { model | slides = updatedSlides, seeds = updatedSeeds }
+
+updateSlide : Int -> Slide.Model -> (Dict Int Slide.Model, Bool) -> (Dict Int Slide.Model, Bool)
+updateSlide index slideModel (dict, dirty) =
+    let
+        (updatedSlide, updatedDirty) = Slide.updateSlide slideModel
+        finalDirty =
+            case dirty of
+                True ->
+                    True
+                False ->
+                    updatedDirty
+    in
+    ( Dict.insert index updatedSlide dict, finalDirty )
+
+updateProject : Model -> (Maybe Model, Bool)
+updateProject ( { slides } as model ) =
+    let
+        (updatedSlides, dirty) = Dict.foldl updateSlide (Dict.empty, False) slides
+    in
+    ( Just { model | slides = updatedSlides }, dirty )
 
 -- UPDATE
 

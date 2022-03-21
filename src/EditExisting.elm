@@ -7,6 +7,7 @@ import Element exposing (Element)
 import Http exposing (stringResolver)
 import LanguageHelpers
 import Loading
+import MessageHelpers exposing (sendCommandMessage)
 import ProjectAccess exposing (ProjectAccess)
 import Task exposing (Task)
 import Url.Builder as Builder
@@ -68,9 +69,44 @@ fetchProject { flags, kl, ll, pn } =
 -- UPDATE
 
 type Msg =
-    PassedSlowLoadThreshold
-    | CompletedProjectLoad (Result Http.Error Project.Model)
+    CompletedProjectLoad (Result Http.Error Project.Model)
     | EditMsg Edit.Msg
+    | PassedSlowLoadThreshold
+    | UpdateProject
+
+updateProject : Model -> Model
+updateProject ( { project } as model ) =
+    let
+        originalProject =
+            case project of
+                Edit.Clean (Api.Loaded p) ->
+                    Just p
+
+                Edit.Dirty (Api.Loaded p) ->
+                    Just p
+
+                _ ->
+                    Nothing
+
+        (updatedProject, dirty) =
+            case originalProject of
+                Just p ->
+                    Project.updateProject p
+
+                Nothing ->
+                    (Nothing, False)
+    in
+    case dirty of
+        True ->
+            case updatedProject of
+                Just p ->
+                    { model | project = Edit.Dirty (Api.Loaded p) }
+
+                Nothing ->
+                    model
+
+        False ->
+            model
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
@@ -84,7 +120,7 @@ update msg model =
                             |> Project.establishSlideUUIDs
                     in
                     ( { model | project = Edit.Clean (Api.Loaded updatedProject) }
-                    , Cmd.none
+                    , sendCommandMessage UpdateProject
                     )
 
                 Err _ ->
@@ -120,6 +156,21 @@ update msg model =
                             model
             in
             ( updatedModel , Cmd.none )
+
+        UpdateProject ->
+            let
+                updatedModel =
+                    case model.project of
+                        Edit.Clean (Api.Loaded _) ->
+                            updateProject model
+
+                        Edit.Dirty (Api.Loaded _) ->
+                            updateProject model
+
+                        _ ->
+                            model
+            in
+            ( updatedModel, Cmd.none )
 
 view : Model -> Element Msg
 view model =
