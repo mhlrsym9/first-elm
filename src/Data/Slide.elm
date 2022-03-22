@@ -57,10 +57,13 @@ stringToPosition s =
             case (String.toLower str) of
                 "left" ->
                     Left
+
                 "center" ->
                     Center
+
                 "right" ->
                     Right
+
                 _ ->
                     NoPosition
 
@@ -171,19 +174,6 @@ type alias TransferResultToMessage = TransferResult -> Msg
 type MediaRequest
     = File
     | Url
-
-mediaRequestToString : MediaRequest -> String
-mediaRequestToString mr =
-    case mr of
-        File ->
-            "file"
-
-        Url ->
-            "URL"
-
-type Dialog
-    = PositionDlg
-    | MediaRequestDlg
 
 type alias Model =
     { componentDescription : String
@@ -421,19 +411,20 @@ updateSlide ( { videos } as model ) =
 -- UPDATE
 
 type Msg
-    = Cancelled ComponentType MediaRequest
-    | ChoosePosition ComponentType MediaRequest Position
+    = Cancelled
+    | ChoosePosition String Position
     | ComponentDescriptionInput String
     | ComponentUrlInput ComponentType String
     | CopyUrl String
-    | LoadComponent ComponentType MediaRequest
     | MakeDirty
     | MediaRequested ComponentType MediaRequest
     | MediaTransferred ComponentType TransferResult
-    | PrepareDialog Dialog ComponentType MediaRequest
+    | PrepareMediaRequestDialog ComponentType MediaRequest
+    | PreparePositionDialog String Position
     | ProcedureMsg (Procedure.Program.Msg Msg)
     | QuestionsAreaMsg QuestionsArea.Msg
     | ShowDialog (Maybe (Config Msg))
+    | UpdatePosition String
     | UpdateVisibility Images Sounds Videos
 
 storeSlideContents : String -> Model -> Model
@@ -494,8 +485,20 @@ transferToServer { initParams } fileName fileMime componentBytes =
         , timeout = Nothing
         }
 
-generateTransferProcedure : Procedure ProcedureError (String, Bytes) Msg -> Model -> TransferResultToMessage -> (Model, Cmd Msg)
-generateTransferProcedure p ( { componentDescription, mediaPosition, seeds } as model ) transferred =
+defaultMediaPosition : ComponentType -> Position
+defaultMediaPosition ct =
+    case ct of
+        Image ->
+            NoPosition
+
+        Sound ->
+            NoPosition
+
+        Video ->
+            Left
+
+generateTransferProcedure : Procedure ProcedureError (String, Bytes) Msg -> Model -> ComponentType -> (Model, Cmd Msg)
+generateTransferProcedure p ( { componentDescription, seeds } as model ) ct =
     let
         (uuid, updatedSeeds) = UUID.step seeds
         fname = UUID.toString uuid
@@ -508,8 +511,8 @@ generateTransferProcedure p ( { componentDescription, mediaPosition, seeds } as 
                     |> Procedure.fromTask
                     |> Procedure.mapError (\err -> HttpError err)
             )
-        |> Procedure.map ( \{ id } -> { description = componentDescription, id = id, position = mediaPosition  } )
-        |> Procedure.try ProcedureMsg transferred
+        |> Procedure.map ( \{ id } -> { description = componentDescription, id = id, position = ( defaultMediaPosition ct ) } )
+        |> Procedure.try ProcedureMsg (MediaTransferred ct)
     )
 
 addComponentToProject : Model -> ComponentType-> (Model, Cmd Msg)
@@ -517,10 +520,7 @@ addComponentToProject model ct =
     let
         mimeTypes = toMimeTypes ct
         preliminaryProcedure =
-            Procedure.map2
-                (\_ b -> b)
-                ( Procedure.do (showDialog Nothing) )
-                ( Procedure.fetch ( Select.file mimeTypes ) )
+            Procedure.fetch ( Select.file mimeTypes )
                 |> Procedure.mapError (\_ -> NoError)
                 |> Procedure.andThen
                     (\f ->
@@ -530,7 +530,7 @@ addComponentToProject model ct =
                                (\bytes -> (File.mime f, bytes))
                     )
     in
-    generateTransferProcedure preliminaryProcedure model (MediaTransferred ct)
+    generateTransferProcedure preliminaryProcedure model ct
 
 fetchComponent : String -> Task Http.Error Api.BytesWithHeaders
 fetchComponent componentUrl =
@@ -591,7 +591,7 @@ addUrlComponentToProject ( { componentUrl } as model ) ct =
                                 Procedure.break NoMimeType
                     )
     in
-    generateTransferProcedure preliminaryProcedure model (MediaTransferred ct)
+    generateTransferProcedure preliminaryProcedure model ct
 
 makeProjectDirty : Cmd Msg
 makeProjectDirty =
@@ -601,16 +601,25 @@ showDialog : Maybe (Config Msg) -> Cmd Msg
 showDialog config =
     sendCommandMessage (ShowDialog config)
 
-update : Msg -> Model -> (Model, Cmd Msg)
-update msg ( { images, procModel, questionsArea, sounds, videos } as model ) =
-    case msg of
-        Cancelled _ _ ->
-            ( { model | componentDescription = "", mediaPosition = Left, componentUrl = "" } , showDialog Nothing)
+updatedVideoPosition : Model -> String -> Videos
+updatedVideoPosition {videos, mediaPosition} idToUpdate =
+    case videos of
+        HiddenVideos _ ->
+            videos
 
-        ChoosePosition ct mr position ->
+        VisibleVideos videoList ->
+            VisibleVideos ( List.Extra.updateIf (\{id} -> idToUpdate == id)  (\video -> { video | position = mediaPosition } ) videoList )
+
+update : Msg -> Model -> (Model, Cmd Msg)
+update msg ( { images, mediaPosition, procModel, questionsArea, sounds, videos } as model ) =
+    case msg of
+        Cancelled ->
+            ( { model | componentDescription = "", mediaPosition = NoPosition, componentUrl = "" }, showDialog Nothing)
+
+        ChoosePosition id position ->
             let
                 updatedModel = { model | mediaPosition = position }
-                config = preparePositionConfig updatedModel ct mr
+                config = preparePositionConfig updatedModel id
             in
             ( updatedModel, showDialog ( Just config ) )
 
@@ -626,22 +635,6 @@ update msg ( { images, procModel, questionsArea, sounds, videos } as model ) =
 
         CopyUrl _ ->
             ( model, Cmd.none )
-
-        LoadComponent ct mr ->
-            let
-                cmds =
-                    case ct of
-                        Image ->
-                            sendCommandMessage (MediaRequested ct mr)
-
-                        Sound ->
-                            sendCommandMessage (MediaRequested ct mr)
-
-                        Video ->
-                            sendCommandMessage (PrepareDialog PositionDlg ct mr)
-
-            in
-            ( model, cmds )
 
 -- Handled in Project module
         MakeDirty ->
@@ -672,7 +665,9 @@ update msg ( { images, procModel, questionsArea, sounds, videos } as model ) =
                         Sound ->
                             case sounds of
                                 VisibleSounds l ->
-                                    ( { model | sounds = VisibleSounds ( media :: l ) }, makeProjectDirty )
+                                    ( { model | sounds = VisibleSounds ( media :: l ) }
+                                    , makeProjectDirty
+                                    )
 
                                 _ ->
                                     ( model, Cmd.none )
@@ -680,7 +675,9 @@ update msg ( { images, procModel, questionsArea, sounds, videos } as model ) =
                         Video ->
                             case videos of
                                 VisibleVideos l ->
-                                    ( { model | videos = VisibleVideos ( media :: l ) }, makeProjectDirty )
+                                    ( { model | videos = VisibleVideos ( media :: l ) }
+                                    , makeProjectDirty
+                                    )
 
                                 _ ->
                                     ( model, Cmd.none )
@@ -688,19 +685,14 @@ update msg ( { images, procModel, questionsArea, sounds, videos } as model ) =
                 Err _ ->
                     ( model, Cmd.none )
 
-        PrepareDialog dlg ct mr ->
+        PrepareMediaRequestDialog ct mt ->
+            ( model, showDialog ( Just ( prepareUrlConfig model ct mt ) ) )
+
+        PreparePositionDialog id position ->
             let
-                f =
-                    case dlg of
-                        PositionDlg ->
-                            preparePositionConfig
-
-                        MediaRequestDlg ->
-                            prepareUrlConfig
-
-                config = f model ct mr
+                updatedModel = { model | mediaPosition = position }
             in
-            ( model, showDialog ( Just config ) )
+            ( updatedModel, showDialog ( Just ( preparePositionConfig updatedModel id ) ) )
 
         ProcedureMsg procMsg ->
             Procedure.Program.update procMsg procModel
@@ -723,6 +715,14 @@ update msg ( { images, procModel, questionsArea, sounds, videos } as model ) =
 -- Handled in Project model
         ShowDialog _ ->
             (model, Cmd.none)
+
+        UpdatePosition idToUpdate ->
+            ( { model | videos = updatedVideoPosition model idToUpdate, mediaPosition = NoPosition }
+            , Cmd.batch
+                [ showDialog Nothing
+                , makeProjectDirty
+                ]
+            )
 
         UpdateVisibility updatedImages updatedSounds updatedVideos ->
             (
@@ -847,12 +847,12 @@ viewLoadComponents { componentDescription } componentType =
             [
                 Input.button
                     buttonAttributes
-                    { onPress = Just (LoadComponent componentType File)
+                    { onPress = Just (MediaRequested componentType File)
                     , label = toSelectComponentFileButtonText componentType
                     }
                 , Input.button
                     buttonAttributes
-                    { onPress = Just (LoadComponent componentType Url)
+                    { onPress = Just (PrepareMediaRequestDialog componentType Url)
                     , label = toSelectComponentUrlButtonText componentType
                     }
             ]
@@ -864,6 +864,12 @@ viewStagedComponentsHeader ct =
         , centerX
         ]
         ( Element.text ("Staged " ++ (toCapitalizedText ct) ++ " Components") )
+
+viewNoStagedComponents : ComponentType -> Element Msg
+viewNoStagedComponents componentType =
+    paragraph
+        [ centerX ]
+        [ Element.text ("No staged " ++ (toText componentType) ++ " components") ]
 
 prepareDescription : Column SlideComponent Msg
 prepareDescription =
@@ -920,24 +926,66 @@ prepareCopyUrlButton { flags, knownLanguage, learningLanguage, projectName } com
             html node
     }
 
+calculateUpdatePositionButtonWidth : ComponentType -> Element.Length
+calculateUpdatePositionButtonWidth ct =
+    case ct of
+        Image ->
+            px 0
+
+        Sound ->
+            px 0
+
+        Video ->
+            fill
+
+determineUpdatePositionView : ComponentType -> (SlideComponent -> Element Msg)
+determineUpdatePositionView ct =
+    let
+        f = \_ -> Element.none
+    in
+    case ct of
+        Image ->
+            f
+
+        Sound ->
+            f
+
+        Video ->
+            \{ id, position } ->
+                Input.button
+                    buttonAttributes
+                    { onPress = Just ( PreparePositionDialog id position )
+                    , label = Element.text "Update Position..."
+                    }
+
+prepareUpdatePositionButton : ComponentType -> Column SlideComponent Msg
+prepareUpdatePositionButton ct =
+    { header = Element.none
+    , width = calculateUpdatePositionButtonWidth ct
+    , view = determineUpdatePositionView ct
+    }
+
+viewComponentsTable : InitParams -> ComponentType -> List SlideComponent -> Element Msg
+viewComponentsTable initParams componentType components =
+    table
+        [ spacing 10 ]
+        { data = components
+        , columns =
+            [ prepareDescription
+            , prepareMediaPosition componentType
+            , prepareCopyUrlButton initParams componentType
+            , prepareUpdatePositionButton componentType
+            ]
+        }
+
 viewComponents : Model -> InitParams -> ComponentType -> List SlideComponent -> Element Msg
 viewComponents model initParams componentType components =
     let
         t =
             if (List.isEmpty components) then
-                paragraph
-                    [ centerX ]
-                    [ Element.text ("No staged " ++ (toText componentType) ++ " components") ]
+                viewNoStagedComponents componentType
             else
-                table
-                    [ spacing 10 ]
-                    { data = components
-                    , columns =
-                        [ prepareDescription
-                        , prepareMediaPosition componentType
-                        , prepareCopyUrlButton initParams componentType
-                        ]
-                    }
+                viewComponentsTable initParams componentType components
     in
     column
         [ centerX
@@ -1041,7 +1089,7 @@ viewLoadComponentFooter requestedMsg requestedText cancelledMsg =
 
 viewLoadComponentFromUrlFooter : ComponentType -> Element Msg
 viewLoadComponentFromUrlFooter ct =
-    viewLoadComponentFooter (MediaRequested ct Url) (toLoadComponentButtonText ct) (Cancelled ct Url)
+    viewLoadComponentFooter (MediaRequested ct Url) (toLoadComponentButtonText ct) Cancelled
 
 prepareUrlConfig : Model -> ComponentType -> MediaRequest -> Config Msg
 prepareUrlConfig model ct _ =
@@ -1076,14 +1124,14 @@ headerPositionText : Element Msg
 headerPositionText =
     Element.text "Supply video position for staging"
 
-viewPositionRadioButtons : Model -> MediaRequest -> Element Msg
-viewPositionRadioButtons { mediaPosition } mr =
+viewPositionRadioButtons : Model -> String -> Element Msg
+viewPositionRadioButtons { mediaPosition } id =
     Input.radioRow
         [ padding 10
         , spacing 20
         , centerX
         ]
-        { onChange = ChoosePosition Video mr
+        { onChange = ChoosePosition id
         , selected = Just mediaPosition
         , label = Input.labelLeft
             [ centerY ]
@@ -1095,25 +1143,12 @@ viewPositionRadioButtons { mediaPosition } mr =
             ]
         }
 
-toMediaRequestedButtonText : MediaRequest -> Element Msg
-toMediaRequestedButtonText mr =
-    Element.text ("Continue specifying " ++ ( mediaRequestToString mr ) ++ " to stage...")
+viewPositionDialogFooter : String -> Element Msg
+viewPositionDialogFooter id =
+    viewLoadComponentFooter (UpdatePosition id) (Element.text "OK") Cancelled
 
-viewPositionDialogFooter : MediaRequest -> Element Msg
-viewPositionDialogFooter mr =
-    let
-        requestedMsg =
-            case mr of
-                File ->
-                    MediaRequested Video mr
-
-                Url ->
-                    PrepareDialog MediaRequestDlg Video mr
-    in
-    viewLoadComponentFooter requestedMsg (toMediaRequestedButtonText mr) (Cancelled Video mr)
-
-preparePositionConfig : Model -> ComponentType -> MediaRequest -> Config Msg
-preparePositionConfig model _ mr =
+preparePositionConfig : Model -> String -> Config Msg
+preparePositionConfig model id =
     { closeMessage = Nothing
     , maskAttributes = [ ]
     , containerAttributes =
@@ -1137,6 +1172,6 @@ preparePositionConfig model _ mr =
     , footerAttributes =
         [ padding 5 ]
     , header = Just headerPositionText
-    , body = Just ( viewPositionRadioButtons model mr )
-    , footer = Just ( viewPositionDialogFooter mr )
+    , body = Just ( viewPositionRadioButtons model id )
+    , footer = Just ( viewPositionDialogFooter id )
     }

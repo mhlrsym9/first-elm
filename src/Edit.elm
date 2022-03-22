@@ -295,7 +295,7 @@ viewSaveButton { project } =
 viewCancelButton : Element Msg
 viewCancelButton =
     Input.button
-        buttonAttributes
+        (centerX :: buttonAttributes)
         { onPress = Just Cancel
         , label = Element.text "Return to Home Screen" }
 
