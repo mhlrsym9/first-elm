@@ -220,7 +220,7 @@ slideComponentsWithPositionDecoder =
 
 imagesAreaDecoder : Decoder Images
 imagesAreaDecoder =
-    map HiddenImages slideComponentsDecoder
+    map HiddenImages slideComponentsWithPositionDecoder
 
 initialSeeds : Flags.Model -> Seeds
 initialSeeds { seeds } =
@@ -237,7 +237,7 @@ initialSeeds { seeds } =
 
 soundsAreaDecoder : Decoder Sounds
 soundsAreaDecoder =
-    map HiddenSounds slideComponentsDecoder
+    map HiddenSounds slideComponentsWithPositionDecoder
 
 videosAreaDecoder : Decoder Videos
 videosAreaDecoder =
@@ -294,7 +294,7 @@ extractImageComponents images =
 
 encodeImages : Images -> Encode.Value
 encodeImages images =
-    encodeSlideComponents (extractImageComponents images)
+    encodeSlideComponentsWithPosition (extractImageComponents images)
 
 extractSoundComponents : Sounds -> List SlideComponent
 extractSoundComponents sounds =
@@ -307,7 +307,7 @@ extractSoundComponents sounds =
 
 encodeSounds : Sounds -> Encode.Value
 encodeSounds sounds =
-    encodeSlideComponents (extractSoundComponents sounds)
+    encodeSlideComponentsWithPosition (extractSoundComponents sounds)
 
 extractVideoComponents : Videos -> List SlideComponent
 extractVideoComponents videos =
@@ -386,8 +386,52 @@ updatePosition ( { position } as sc ) =
         _ ->
             sc
 
-updateSlide : Model -> (Model, Bool)
-updateSlide ( { videos } as model ) =
+updateImages : Model -> (Images, Bool)
+updateImages ( { images } ) =
+    let
+        originalImages =
+            case images of
+                HiddenImages i ->
+                    i
+                VisibleImages i ->
+                    i
+
+        dirty = List.any (\{ position } -> (NoPosition == position)) originalImages
+
+        updatedImages =
+            case images of
+                HiddenImages i ->
+                    HiddenImages (List.map updatePosition i)
+
+                VisibleImages i ->
+                    VisibleImages (List.map updatePosition i)
+    in
+    ( updatedImages, dirty )
+
+updateSounds : Model -> (Sounds, Bool)
+updateSounds ( { sounds } ) =
+    let
+        originalSounds =
+            case sounds of
+                HiddenSounds s ->
+                    s
+                VisibleSounds s ->
+                    s
+
+        dirty = List.any (\{ position } -> (NoPosition == position)) originalSounds
+
+        updatedSounds =
+            case sounds of
+                HiddenSounds s ->
+                    HiddenSounds (List.map updatePosition s)
+
+                VisibleSounds s ->
+                    VisibleSounds (List.map updatePosition s)
+    in
+    ( updatedSounds, dirty )
+
+updateVideos : Model -> (Videos, Bool)
+updateVideos ( { videos } ) =
     let
         originalVideos =
             case videos of
@@ -406,13 +450,24 @@ updateSlide ( { videos } as model ) =
                 VisibleVideos v ->
                     VisibleVideos (List.map updatePosition v)
     in
-    ( { model | videos = updatedVideos }, dirty )
+    ( updatedVideos, dirty )
+
+updateSlide : Model -> (Model, Bool)
+updateSlide model =
+    let
+        (updatedImages, d1) = updateImages model
+        (updatedSounds, d2) = updateSounds model
+        (updatedVideos, d3) = updateVideos model
+    in
+    ( { model | images = updatedImages, sounds = updatedSounds, videos = updatedVideos }
+    , d1 || d2 || d3
+    )
 
 -- UPDATE
 
 type Msg
     = Cancelled
-    | ChoosePosition String Position
+    | ChoosePosition ComponentType String Position
     | ComponentDescriptionInput String
     | ComponentUrlInput ComponentType String
     | CopyUrl String
@@ -420,11 +475,11 @@ type Msg
     | MediaRequested ComponentType MediaRequest
     | MediaTransferred ComponentType TransferResult
     | PrepareMediaRequestDialog ComponentType MediaRequest
-    | PreparePositionDialog String Position
+    | PreparePositionDialog ComponentType String Position
     | ProcedureMsg (Procedure.Program.Msg Msg)
     | QuestionsAreaMsg QuestionsArea.Msg
     | ShowDialog (Maybe (Config Msg))
-    | UpdatePosition String
+    | UpdatePosition ComponentType String
     | UpdateVisibility Images Sounds Videos
 
 storeSlideContents : String -> Model -> Model
@@ -489,10 +544,10 @@ defaultMediaPosition : ComponentType -> Position
 defaultMediaPosition ct =
     case ct of
         Image ->
-            NoPosition
+            Left
 
         Sound ->
-            NoPosition
+            Left
 
         Video ->
             Left
@@ -601,6 +656,24 @@ showDialog : Maybe (Config Msg) -> Cmd Msg
 showDialog config =
     sendCommandMessage (ShowDialog config)
 
+updatedImagePosition : Model -> String -> Images
+updatedImagePosition {images, mediaPosition} idToUpdate =
+    case images of
+        HiddenImages _ ->
+            images
+
+        VisibleImages imageList ->
+            VisibleImages ( List.Extra.updateIf (\{id} -> idToUpdate == id)  (\image -> { image | position = mediaPosition } ) imageList )
+
+updatedSoundPosition : Model -> String -> Sounds
+updatedSoundPosition {sounds, mediaPosition} idToUpdate =
+    case sounds of
+        HiddenSounds _ ->
+            sounds
+
+        VisibleSounds soundList ->
+            VisibleSounds ( List.Extra.updateIf (\{id} -> idToUpdate == id)  (\sound -> { sound | position = mediaPosition } ) soundList )
+
 updatedVideoPosition : Model -> String -> Videos
 updatedVideoPosition {videos, mediaPosition} idToUpdate =
     case videos of
@@ -616,10 +689,10 @@ update msg ( { images, mediaPosition, procModel, questionsArea, sounds, videos }
         Cancelled ->
             ( { model | componentDescription = "", mediaPosition = NoPosition, componentUrl = "" }, showDialog Nothing)
 
-        ChoosePosition id position ->
+        ChoosePosition ct id position ->
             let
                 updatedModel = { model | mediaPosition = position }
-                config = preparePositionConfig updatedModel id
+                config = preparePositionConfig updatedModel ct id
             in
             ( updatedModel, showDialog ( Just config ) )
 
@@ -688,11 +761,11 @@ update msg ( { images, mediaPosition, procModel, questionsArea, sounds, videos }
         PrepareMediaRequestDialog ct mt ->
             ( model, showDialog ( Just ( prepareUrlConfig model ct mt ) ) )
 
-        PreparePositionDialog id position ->
+        PreparePositionDialog ct id position ->
             let
                 updatedModel = { model | mediaPosition = position }
             in
-            ( updatedModel, showDialog ( Just ( preparePositionConfig updatedModel id ) ) )
+            ( updatedModel, showDialog ( Just ( preparePositionConfig updatedModel ct id ) ) )
 
         ProcedureMsg procMsg ->
             Procedure.Program.update procMsg procModel
@@ -716,8 +789,20 @@ update msg ( { images, mediaPosition, procModel, questionsArea, sounds, videos }
         ShowDialog _ ->
             (model, Cmd.none)
 
-        UpdatePosition idToUpdate ->
-            ( { model | videos = updatedVideoPosition model idToUpdate, mediaPosition = NoPosition }
+        UpdatePosition ct idToUpdate ->
+            let
+                updatedModel =
+                    case ct of
+                        Image ->
+                            { model | images = updatedImagePosition model idToUpdate }
+
+                        Sound ->
+                            { model | sounds = updatedSoundPosition model idToUpdate }
+
+                        Video ->
+                            { model | videos = updatedVideoPosition model idToUpdate }
+            in
+            ( { updatedModel | mediaPosition = NoPosition }
             , Cmd.batch
                 [ showDialog Nothing
                 , makeProjectDirty
@@ -880,25 +965,17 @@ prepareDescription =
             el [ centerY ] (Element.text description)
     }
 
-prepareMediaPositionText : ComponentType -> Position -> Element Msg
-prepareMediaPositionText ct position =
-    case ct of
-        Image ->
-            Element.text "---"
+prepareMediaPositionText : Position -> Element Msg
+prepareMediaPositionText position =
+    Element.text ( positionToString position )
 
-        Sound ->
-            Element.text "---"
-
-        Video ->
-            Element.text ( positionToString position )
-
-prepareMediaPosition : ComponentType -> Column SlideComponent Msg
-prepareMediaPosition ct =
+prepareMediaPosition : Column SlideComponent Msg
+prepareMediaPosition =
     { header = Element.text "Position"
     , width = fill
     , view =
         \{ position } ->
-            el [ centerY ] ( prepareMediaPositionText ct position )
+            el [ centerY ] ( prepareMediaPositionText position )
     }
 
 prepareCopyUrlButton : InitParams -> ComponentType -> Column SlideComponent Msg
@@ -926,42 +1003,23 @@ prepareCopyUrlButton { flags, knownLanguage, learningLanguage, projectName } com
             html node
     }
 
-calculateUpdatePositionButtonWidth : ComponentType -> Element.Length
-calculateUpdatePositionButtonWidth ct =
-    case ct of
-        Image ->
-            px 0
-
-        Sound ->
-            px 0
-
-        Video ->
-            fill
+calculateUpdatePositionButtonWidth : Element.Length
+calculateUpdatePositionButtonWidth =
+    fill
 
 determineUpdatePositionView : ComponentType -> (SlideComponent -> Element Msg)
 determineUpdatePositionView ct =
-    let
-        f = \_ -> Element.none
-    in
-    case ct of
-        Image ->
-            f
-
-        Sound ->
-            f
-
-        Video ->
-            \{ id, position } ->
-                Input.button
-                    buttonAttributes
-                    { onPress = Just ( PreparePositionDialog id position )
-                    , label = Element.text "Update Position..."
-                    }
+    \{ id, position } ->
+        Input.button
+            buttonAttributes
+            { onPress = Just ( PreparePositionDialog ct id position )
+            , label = Element.text "Update Position..."
+            }
 
 prepareUpdatePositionButton : ComponentType -> Column SlideComponent Msg
 prepareUpdatePositionButton ct =
     { header = Element.none
-    , width = calculateUpdatePositionButtonWidth ct
+    , width = calculateUpdatePositionButtonWidth
     , view = determineUpdatePositionView ct
     }
 
@@ -972,7 +1030,7 @@ viewComponentsTable initParams componentType components =
         { data = components
         , columns =
             [ prepareDescription
-            , prepareMediaPosition componentType
+            , prepareMediaPosition
             , prepareCopyUrlButton initParams componentType
             , prepareUpdatePositionButton componentType
             ]
@@ -1124,14 +1182,14 @@ headerPositionText : Element Msg
 headerPositionText =
     Element.text "Supply video position for staging"
 
-viewPositionRadioButtons : Model -> String -> Element Msg
-viewPositionRadioButtons { mediaPosition } id =
+viewPositionRadioButtons : Model -> ComponentType -> String -> Element Msg
+viewPositionRadioButtons { mediaPosition } ct id =
     Input.radioRow
         [ padding 10
         , spacing 20
         , centerX
         ]
-        { onChange = ChoosePosition id
+        { onChange = ChoosePosition ct id
         , selected = Just mediaPosition
         , label = Input.labelLeft
             [ centerY ]
@@ -1143,12 +1201,12 @@ viewPositionRadioButtons { mediaPosition } id =
             ]
         }
 
-viewPositionDialogFooter : String -> Element Msg
-viewPositionDialogFooter id =
-    viewLoadComponentFooter (UpdatePosition id) (Element.text "OK") Cancelled
+viewPositionDialogFooter : ComponentType -> String -> Element Msg
+viewPositionDialogFooter ct id =
+    viewLoadComponentFooter (UpdatePosition ct id) (Element.text "OK") Cancelled
 
-preparePositionConfig : Model -> String -> Config Msg
-preparePositionConfig model id =
+preparePositionConfig : Model -> ComponentType -> String -> Config Msg
+preparePositionConfig model ct id =
     { closeMessage = Nothing
     , maskAttributes = [ ]
     , containerAttributes =
@@ -1172,6 +1230,6 @@ preparePositionConfig model id =
     , footerAttributes =
         [ padding 5 ]
     , header = Just headerPositionText
-    , body = Just ( viewPositionRadioButtons model id )
-    , footer = Just ( viewPositionDialogFooter id )
+    , body = Just ( viewPositionRadioButtons model ct id )
+    , footer = Just ( viewPositionDialogFooter ct id )
     }
