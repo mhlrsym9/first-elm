@@ -574,11 +574,20 @@ showDialog : Maybe (Config Msg) -> Cmd Msg
 showDialog config =
     sendCommandMessage (ShowDialog config)
 
+updateMediaPosition : Model -> Position
+updateMediaPosition { mediaPosition } =
+    case mediaPosition of
+        NoPosition ->
+            Left
+
+        a ->
+            a
+
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg ( { images, mediaPosition, procModel, questionsArea, sounds, videos } as model ) =
     case msg of
         Cancelled ->
-            ( { model | componentDescription = "", mediaPosition = NoPosition, componentUrl = "" }, showDialog Nothing)
+            ( { model | componentDescription = "", componentUrl = "" }, showDialog Nothing)
 
         ChoosePosition position ->
             ( { model | mediaPosition = position }, makeProjectDirty )
@@ -625,8 +634,12 @@ update msg ( { images, mediaPosition, procModel, questionsArea, sounds, videos }
                         Sound ->
                             case sounds of
                                 VisibleSounds l ->
-                                    ( { model | sounds = VisibleSounds ( media :: l ) }
-                                    , makeProjectDirty
+                                    (
+                                        { model
+                                        | sounds = VisibleSounds ( media :: l )
+                                        , mediaPosition = updateMediaPosition model
+                                        }
+                                        , makeProjectDirty
                                     )
 
                                 _ ->
@@ -635,8 +648,12 @@ update msg ( { images, mediaPosition, procModel, questionsArea, sounds, videos }
                         Video ->
                             case videos of
                                 VisibleVideos l ->
-                                    ( { model | videos = VisibleVideos ( media :: l ) }
-                                    , makeProjectDirty
+                                    (
+                                        { model
+                                        | videos = VisibleVideos ( media :: l )
+                                        , mediaPosition = updateMediaPosition model
+                                        }
+                                        , makeProjectDirty
                                     )
 
                                 _ ->
