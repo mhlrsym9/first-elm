@@ -703,7 +703,7 @@ viewTinyMCEEditor : Model -> (String, Element Msg)
 viewTinyMCEEditor { initParams, slideId, slideText } =
     let
         node = Html.node "tinymce-editor"
-           [ attribute "api-key" "no-api-key"
+           [ attribute "api-key" "0cqgum03zgzxoroz2zyrwedektxs7dmscrvnfolhyl1f6d57"
            , attribute "config" initParams.flags.editorConfigName
            , attribute "height" "500"
            , attribute "plugins" "link image anchor media table paste code help"
