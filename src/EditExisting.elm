@@ -7,7 +7,6 @@ import Element exposing (Element)
 import Http exposing (stringResolver)
 import LanguageHelpers
 import Loading
-import MessageHelpers exposing (sendCommandMessage)
 import ProjectAccess exposing (ProjectAccess)
 import Task exposing (Task)
 import Url.Builder as Builder
@@ -72,7 +71,6 @@ type Msg =
     CompletedProjectLoad (Result Http.Error Project.Model)
     | EditMsg Edit.Msg
     | PassedSlowLoadThreshold
-    | UpdateProject
 
 updateProject : Model -> Model
 updateProject ( { project } as model ) =
@@ -118,10 +116,9 @@ update msg model =
                         updatedProject = project
                             |> Project.establishIndexes
                             |> Project.establishSlideUUIDs
+                        updatedModel = updateProject { model | project = Edit.Clean (Api.Loaded updatedProject) }
                     in
-                    ( { model | project = Edit.Clean (Api.Loaded updatedProject) }
-                    , sendCommandMessage UpdateProject
-                    )
+                    ( updatedModel, Cmd.none )
 
                 Err _ ->
                     ( { model | project = Edit.Clean Api.Failed }
@@ -156,21 +153,6 @@ update msg model =
                             model
             in
             ( updatedModel , Cmd.none )
-
-        UpdateProject ->
-            let
-                updatedModel =
-                    case model.project of
-                        Edit.Clean (Api.Loaded _) ->
-                            updateProject model
-
-                        Edit.Dirty (Api.Loaded _) ->
-                            updateProject model
-
-                        _ ->
-                            model
-            in
-            ( updatedModel, Cmd.none )
 
 view : Model -> Element Msg
 view model =

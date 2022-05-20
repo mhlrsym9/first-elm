@@ -20,9 +20,23 @@ fromContentCode cc =
         ContentCode s ->
             s
 
+type LegacyCode =
+    LegacyCode String
+
+toLegacyCode : String -> LegacyCode
+toLegacyCode s =
+    LegacyCode s
+
+fromLegacyCode : LegacyCode -> String
+fromLegacyCode lc =
+    case lc of
+        LegacyCode s ->
+            s
+
 type alias Language =
-    { displayName : String
-    , contentCode : ContentCode
+    { contentCode : ContentCode
+    , displayName : String
+    , legacyCode : LegacyCode
     }
 
 contentCodeStringFromLanguage : Language -> String
@@ -33,6 +47,10 @@ displayNameFromLanguage : Language -> String
 displayNameFromLanguage language =
     language.displayName
 
+legacyCodeStringFromLanguage : Language -> String
+legacyCodeStringFromLanguage language =
+    fromLegacyCode language.legacyCode
+
 type alias Languages =
     List Language
 
@@ -41,15 +59,20 @@ type alias Model =
     , dictLanguages : Dict String Language
     }
 
-languageDecoder : Decoder Language
-languageDecoder =
-    Json.Decode.succeed Language
-        |> required "display" string
-        |> custom contentCodeDecoder
-
 contentCodeDecoder : Decoder ContentCode
 contentCodeDecoder =
     map ContentCode (field "content_code" string)
+
+legacyCodeDecoder : Decoder LegacyCode
+legacyCodeDecoder =
+    map LegacyCode (field "legacy_code" string)
+
+languageDecoder : Decoder Language
+languageDecoder =
+    Json.Decode.succeed Language
+        |> custom contentCodeDecoder
+        |> required "display" string
+        |> custom legacyCodeDecoder
 
 languagesDecoder : Decoder Languages
 languagesDecoder =
@@ -66,7 +89,7 @@ createDictTuple ( { contentCode } as language ) =
 
 emptyLanguage : Language
 emptyLanguage =
-    { displayName = "", contentCode = ( ContentCode "" ) }
+    { contentCode = ( ContentCode "" ), displayName = "", legacyCode = ( LegacyCode "" ) }
 
 initialData : Languages -> Model
 initialData languages =
@@ -100,7 +123,7 @@ languageFromContentCode model cc =
         Just language ->
             language
         Nothing ->
-            { displayName = "", contentCode = toContentCode cc }
+            { contentCode = toContentCode cc, displayName = "", legacyCode = toLegacyCode "" }
 
 findLanguageFromContentCode : Model -> String -> Maybe Language
 findLanguageFromContentCode { dictLanguages } cc =
@@ -120,4 +143,3 @@ fetchLanguages =
         , resolver = stringResolver (Api.handleJsonResponse languagesDecoder)
         , timeout = Nothing
         }
-

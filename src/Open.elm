@@ -50,8 +50,7 @@ projectDescriptionsDecoder =
     (list projectDescriptionDecoder)
 
 type alias Data =
-    { chosenProject : Maybe String
-    , displayedProjectDescriptions : ProjectDescriptions
+    { displayedProjectDescriptions : ProjectDescriptions
     , knownLanguageModel : LanguageSelect.Model
     , learningLanguageModel : LanguageSelect.Model
     , loadingPath : String
@@ -64,8 +63,7 @@ type Model
 
 initialData : Navigation.Key -> LanguageSelect.Model -> LanguageSelect.Model -> String -> Data
 initialData navigationKey knownLanguageModel learningLanguageModel loadingPath =
-    { chosenProject = Nothing
-    , displayedProjectDescriptions = [ ]
+    { displayedProjectDescriptions = [ ]
     , knownLanguageModel = knownLanguageModel
     , learningLanguageModel = learningLanguageModel
     , loadingPath = loadingPath
@@ -113,7 +111,6 @@ type Msg
     | LearningLanguageMsg LanguageSelect.Msg
     | Open String
     | PassedSlowLoadThreshold
-    | UpdateProject String
 
 extractContentCodes : ProjectDescriptions -> (ProjectDescription -> String) -> List String
 extractContentCodes pds f =
@@ -293,9 +290,6 @@ update msg model =
             in
             ( Success { data | projectDescriptions = updatedProjectDescriptions }, Cmd.none )
 
-        ( UpdateProject project, Success data ) ->
-            ( Success { data | chosenProject = Just project }, Cmd.none )
-
 -- VIEW
 
 viewProjectsHeader : Element Msg
@@ -368,7 +362,7 @@ viewProjectsTable displayedProjectDescriptions =
 view : Model -> Element Msg
 view model =
     case model of
-        Success { knownLanguageModel, learningLanguageModel, loadingPath, chosenProject, projectDescriptions, displayedProjectDescriptions } ->
+        Success { knownLanguageModel, learningLanguageModel, loadingPath, projectDescriptions, displayedProjectDescriptions } ->
             case projectDescriptions of
                 Api.Failed ->
                     Element.el

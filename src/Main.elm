@@ -33,6 +33,7 @@ import Url.Builder as Builder
 ---- PORTS ----
 
 port syncMceEditor : () -> Cmd msg
+port updateDirtyFlag : Bool -> Cmd msg
 port consoleLog : String -> Cmd msg
 
 port dirtyReceived : (Bool -> msg) -> Sub msg
@@ -389,6 +390,9 @@ update msg model =
                 Edit.UpdateCurrentSlideContents nextMsg ->
                     ( model, syncMceEditorProcedure (EditMsg nextMsg) )
 
+                Edit.UpdateDirtyFlag flag ->
+                    ( model, updateDirtyFlag flag )
+
                 _ ->
                     updateEdit editMsg editModel model
 
@@ -469,9 +473,7 @@ update msg model =
                 updatedEditModel =
                     Edit.storeSlideContents slideContents editModel
             in
-            ( { model | page = Edit updatedEditModel }
-            , Task.perform (always nextMsg) (Task.succeed ())
-            )
+            update nextMsg { model | page = Edit updatedEditModel }
 
         ( ReceivedMceEditorMsg _ _, _ ) ->
 --            Debug.todo "Handle ReceivedMceEditorMessage error case"

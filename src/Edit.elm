@@ -70,6 +70,7 @@ type Msg
     | Save
     | ShowDialog ( Maybe (Config Msg) )
     | UpdateCurrentSlideContents Msg
+    | UpdateDirtyFlag Bool
 
 saveProjectDecoder : Decoder SaveResult
 saveProjectDecoder =
@@ -160,10 +161,10 @@ update msg ( { knownLanguage, learningLanguage, projectName, project, flags } as
                 Ok _ ->
                     case project of
                         Dirty (Api.Loading pm) ->
-                            ( { model | project = Clean (Api.Loaded pm) }, Cmd.none )
+                            ( { model | project = Dirty (Api.Loaded pm) }, sendCommandMessage (UpdateDirtyFlag False) )
 
                         Dirty (Api.LoadingSlowly pm) ->
-                            ( { model | project = Clean (Api.Loaded pm) }, Cmd.none )
+                            ( { model | project = Dirty (Api.Loaded pm) }, sendCommandMessage (UpdateDirtyFlag False) )
 
                         _ ->
                             ( model, Cmd.none )
@@ -249,6 +250,9 @@ update msg ( { knownLanguage, learningLanguage, projectName, project, flags } as
             ( model, Cmd.none )
 
         UpdateCurrentSlideContents _ ->
+            ( model, Cmd.none )
+
+        UpdateDirtyFlag _ ->
             ( model, Cmd.none )
 
 viewEditPageInfo : Model -> Element Msg
