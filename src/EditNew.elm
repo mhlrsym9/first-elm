@@ -6,7 +6,7 @@ import Edit
 import Element exposing (Element)
 import Flags exposing (Flags)
 import Http exposing (jsonBody, stringResolver)
-import Json.Decode exposing (Decoder, succeed, string)
+import Json.Decode exposing (bool, Decoder, succeed, string)
 import Json.Decode.Pipeline exposing (required)
 import Json.Encode as Encode
 import Loading
@@ -20,7 +20,9 @@ type alias Model =
     Edit.Model
 
 type alias CreateResult =
-    { id : String }
+    { id : String
+    , doesAlreadyExist: Bool
+    }
 
 init : ProjectAccess -> (Model, Cmd Msg)
 init { flags, key, kl, ll, pn } =
@@ -61,6 +63,7 @@ createProjectDecoder : Decoder CreateResult
 createProjectDecoder =
     succeed CreateResult
         |> required "id" string
+        |> required "doesAlreadyExist" bool
 
 createProject : String -> Encode.Value -> Task Http.Error CreateResult
 createProject candorUrl json =
@@ -81,18 +84,25 @@ update msg ( { project } as model ) =
     case msg of
         CompletedProjectCreate result ->
             case result of
-                Ok _ ->
-                    case project of
-                        Edit.Clean (Api.Loading projectModel) ->
-                            ( { model | project = Edit.Clean (Api.Loaded projectModel) }
-                            , Cmd.none )
+                Ok { doesAlreadyExist } ->
+                    case doesAlreadyExist of
+                        False ->
+                            case project of
+                                Edit.Clean (Api.Loading projectModel) ->
+                                    ( { model | project = Edit.Clean (Api.Loaded projectModel) }
+                                    , Cmd.none )
 
-                        Edit.Clean (Api.LoadingSlowly projectModel) ->
-                            ( { model | project = Edit.Clean (Api.Loaded projectModel) }
-                            , Cmd.none )
+                                Edit.Clean (Api.LoadingSlowly projectModel) ->
+                                    ( { model | project = Edit.Clean (Api.Loaded projectModel) }
+                                    , Cmd.none )
 
-                        _ ->
-                            ( model, Cmd.none )
+                                _ ->
+                                    ( model, Cmd.none )
+
+                        True ->
+                            ( { model | project = Edit.Clean Api.Failed, doesAlreadyExist = True }
+                            , Cmd.none
+                            )
 
                 Err _ ->
                     ( { model | project = Edit.Clean Api.Failed }
@@ -116,7 +126,6 @@ update msg ( { project } as model ) =
 
                 _ ->
                     ( model, Cmd.none )
-
 
 view : Model -> Element Msg
 view model =

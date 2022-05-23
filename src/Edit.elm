@@ -4,7 +4,7 @@ import Api
 import Browser.Navigation as Navigation
 import Data.Project as Project
 import Dialog exposing (Config)
-import Element exposing (centerX, column, Element, el, inFront, padding, row, spaceEvenly, spacing, spacingXY)
+import Element exposing (centerX, column, Element, el, inFront, padding, row, spacing, spacingXY)
 import Element.Font as Font
 import Element.Input as Input
 import Flags exposing (Flags)
@@ -27,7 +27,8 @@ type Modified a =
     | Dirty a
 
 type alias Model =
-    { flags : Flags.Model
+    { doesAlreadyExist : Bool
+    , flags : Flags.Model
     , knownLanguage : LanguageHelpers.Language
     , learningLanguage : LanguageHelpers.Language
     , navigationKey : Navigation.Key
@@ -50,7 +51,8 @@ type alias Init =
 
 init : Init -> Model
 init { key, kl, ll, pn, model, flags } =
-    { flags = flags
+    { doesAlreadyExist = False
+    , flags = flags
     , knownLanguage = kl
     , learningLanguage = ll
     , navigationKey = key
@@ -350,7 +352,7 @@ loadedView model projectModel =
 errorView : Model -> String -> Element Msg
 errorView { projectName } errorStr =
     column
-        [ spaceEvenly
+        [ spacing 10
         , centerX
         ]
         [ Element.text ("Project " ++ projectName ++ errorStr)
@@ -362,12 +364,17 @@ loadingSlowlyView { flags } =
     Loading.iconElement flags.loadingPath
 
 view : Model -> Element Msg
-view ( {  project, projectName, flags } as model ) =
+view ( {  doesAlreadyExist, project, projectName, flags } as model ) =
     let
         element =
             case project of
                 Clean Api.Failed ->
-                    errorView model " could not be created."
+                    case doesAlreadyExist of
+                        True ->
+                            errorView model " already exists."
+
+                        False ->
+                            errorView model " could not be created."
 
                 Dirty Api.Failed ->
                     errorView model " could not be saved."

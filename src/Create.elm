@@ -36,15 +36,32 @@ init key languages =
 -- UPDATE
 
 type Msg
-    = KnownLanguageMsg LanguageSelect.Msg
+    = Cancel
+    | Create
+    | KnownLanguageMsg LanguageSelect.Msg
     | LearningLanguageMsg LanguageSelect.Msg
     | ProjectNameInput String
-    | Create
-    | Cancel
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
     case ( msg, model ) of
+        ( Cancel, Success data _ _ ) ->
+            ( model, Navigation.pushUrl data.navigationKey (Routes.routeToUrl Routes.Home) )
+
+        ( Create, Success { projectName, navigationKey } knownLanguageModel learningLanguageModel ) ->
+            ( model
+            , Navigation.pushUrl
+                navigationKey
+                (Routes.routeToUrl
+                    (
+                        Routes.EditNew
+                            (LanguageSelect.getChosenContentCodeString knownLanguageModel)
+                            (LanguageSelect.getChosenContentCodeString learningLanguageModel)
+                            (Just projectName)
+                    )
+                )
+            )
+
         ( KnownLanguageMsg knownLanguageMsg, Success data knownLanguageModel learningLanguageModel ) ->
             let
                 ( updatedModel, updatedCmd ) =
@@ -67,23 +84,6 @@ update msg model =
             ( Success { data | projectName = projectName } knownLanguageModel learningLanguageModel
             , Cmd.none
             )
-
-        ( Create, Success { projectName, navigationKey } knownLanguageModel learningLanguageModel ) ->
-            ( model
-            , Navigation.pushUrl
-                navigationKey
-                (Routes.routeToUrl
-                    (
-                        Routes.EditNew
-                            (LanguageSelect.getChosenContentCodeString knownLanguageModel)
-                            (LanguageSelect.getChosenContentCodeString learningLanguageModel)
-                            (Just projectName)
-                    )
-                )
-            )
-
-        ( Cancel, Success data _ _ ) ->
-            ( model, Navigation.pushUrl data.navigationKey (Routes.routeToUrl Routes.Home) )
 
 viewCreateButton : Model -> Element Msg
 viewCreateButton model =
