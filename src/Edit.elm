@@ -1,4 +1,4 @@
-module Edit exposing (encodeProject, Model, Modified(..), Msg(..), init, processDirtyMessage, storeSlideContents, update, view)
+module Edit exposing (encodeProject, establishProject, Model, Modified(..), Msg(..), init, initNewProject, processDirtyMessage, storeSlideContents, update, view)
 
 import Api
 import Browser.Navigation as Navigation
@@ -19,6 +19,7 @@ import Routes
 import Task exposing (Task)
 import UIHelpers exposing (buttonAttributes)
 import Url.Builder as Builder
+import UUID exposing (Seeds)
 
 -- MODEL
 
@@ -40,7 +41,7 @@ type alias Model =
 type alias SaveResult =
     { id : String }
 
-type alias Init =
+type alias InitParams =
     { flags : Flags.Model
     , kl : LanguageHelpers.Language
     , key : Navigation.Key
@@ -49,7 +50,7 @@ type alias Init =
     , model : Api.Status Project.Model
     }
 
-init : Init -> Model
+init : InitParams -> Model
 init { key, kl, ll, pn, model, flags } =
     { doesAlreadyExist = False
     , flags = flags
@@ -60,6 +61,22 @@ init { key, kl, ll, pn, model, flags } =
     , projectName = pn
     , showHomeScreenSaveWarning = False
     }
+
+initNewProject : Project.InitParams -> ( Project.Model, Cmd Msg )
+initNewProject initParams =
+    let
+        ( projectModel, command ) = Project.initNewProject initParams
+    in
+    ( projectModel, Cmd.map ProjectMsg command )
+
+establishProject : Project.Model -> (Project.Model, Cmd Msg)
+establishProject project =
+    let
+        (updatedProject, command) = project
+            |> Project.establishIndexes
+            |> Project.establishSlideUUIDs
+    in
+    (updatedProject, Cmd.map ProjectMsg command)
 
 -- UPDATE
 
@@ -73,6 +90,7 @@ type Msg
     | ShowDialog ( Maybe (Config Msg) )
     | UpdateCurrentSlideContents Msg
     | UpdateDirtyFlag Bool
+    | UpdateSeeds Seeds
 
 saveProjectDecoder : Decoder SaveResult
 saveProjectDecoder =
@@ -209,6 +227,9 @@ update msg ( { knownLanguage, learningLanguage, projectName, project, flags } as
                 Project.UpdateCurrentSlideContents nextMsg ->
                     ( model, sendCommandMessage (UpdateCurrentSlideContents ( ProjectMsg nextMsg ) ) )
 
+                Project.UpdateSeeds seeds ->
+                    ( model, sendCommandMessage (UpdateSeeds seeds) )
+
                 _ ->
                     case project of
                         Clean (Api.Loaded projectModel) ->
@@ -255,6 +276,10 @@ update msg ( { knownLanguage, learningLanguage, projectName, project, flags } as
             ( model, Cmd.none )
 
         UpdateDirtyFlag _ ->
+            ( model, Cmd.none )
+
+        -- Handled by parent
+        UpdateSeeds _ ->
             ( model, Cmd.none )
 
 viewEditPageInfo : Model -> Element Msg
@@ -364,7 +389,7 @@ loadingSlowlyView { flags } =
     Loading.iconElement flags.loadingPath
 
 view : Model -> Element Msg
-view ( {  doesAlreadyExist, project, projectName, flags } as model ) =
+view ( {  doesAlreadyExist, project, projectName } as model ) =
     let
         element =
             case project of

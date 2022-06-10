@@ -6,17 +6,18 @@ import Dict exposing (Dict)
 import Element exposing (centerX, Column, column, el, Element, fill, IndexedColumn, indexedTable, padding, spacing, table)
 import Element.Font as Font
 import Element.Input as Input
-import Json.Decode exposing (Decoder, int, succeed)
+import Json.Decode exposing (bool, Decoder, int, succeed)
 import Json.Decode.Extra exposing (indexedList)
-import Json.Decode.Pipeline exposing (hardcoded, required)
+import Json.Decode.Pipeline exposing (hardcoded, optional, required)
 import Json.Encode as Encode
-import Task exposing (Task)
+import MessageHelpers
 import UIHelpers exposing (buttonAttributes)
 
 type alias Model =
     { questionIndex : Int
-    , slideIndex : Int
     , questions : Dict Int Question.Model
+    , slideIndex : Int
+    , skipQuestions : Bool
     }
 
 questionDecoder : Int -> Decoder (Int, Question.Model)
@@ -33,14 +34,16 @@ questionsAreaDecoder : Decoder Model
 questionsAreaDecoder =
     succeed Model
         |> required "questionIndex" int
-        |> hardcoded 0
         |> required "questions" questionsDecoder
+        |> hardcoded 0
+        |> optional "skipQuestions" bool False
 
 encodeQuestionsArea : Model -> Encode.Value
-encodeQuestionsArea { questionIndex, questions } =
+encodeQuestionsArea { questionIndex, questions, skipQuestions } =
     Encode.object
         [ ( "questionIndex", Encode.int questionIndex )
         , ( "questions", questions |> Dict.values |> Encode.list Question.encodeQuestion )
+        , ( "skipQuestions", Encode.bool skipQuestions )
         ]
 
 init : { slideIndex : Int } -> Model
@@ -49,8 +52,9 @@ init ( { slideIndex } ) =
         questionModel = Question.init { questionIndex = 0, slideIndex = slideIndex }
     in
     { questionIndex = 0
-    , slideIndex = slideIndex
     , questions = Dict.singleton 0 questionModel
+    , slideIndex = slideIndex
+    , skipQuestions = False
     }
 
 updateQuestionIndexes : Dict Int Question.Model -> Dict Int Question.Model
@@ -81,6 +85,7 @@ type Msg =
     | MakeDirty
     | Move Int ProjectHelpers.Direction
     | QuestionMsg Int Question.Msg
+    | SkipQuestionsChecked Bool
 
 updateQuestion : Int -> Question.Msg -> Model -> (Model, Cmd Msg)
 updateQuestion index questionMsg ( { questions } as model ) =
@@ -104,7 +109,7 @@ updateQuestion index questionMsg ( { questions } as model ) =
 
 makeProjectDirty : Cmd Msg
 makeProjectDirty =
-    Task.perform ( always MakeDirty ) ( Task.succeed () )
+    MessageHelpers.sendCommandMessage MakeDirty
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg ( { slideIndex, questions } as model ) =
@@ -173,6 +178,9 @@ update msg ( { slideIndex, questions } as model ) =
                 _ ->
                     updateQuestion index questionMsg model
 
+        SkipQuestionsChecked v ->
+            ( { model | skipQuestions = v }, makeProjectDirty )
+
 -- VIEW
 
 viewHeader : Element Msg
@@ -182,6 +190,19 @@ viewHeader =
         , centerX
         ]
         (Element.text "Questions")
+
+viewSkipQuestions : Model -> Element Msg
+viewSkipQuestions { skipQuestions } =
+    Input.checkbox
+        [ ]
+        { onChange = SkipQuestionsChecked
+        , icon = Input.defaultCheckbox
+        , checked = skipQuestions
+        , label =
+            Input.labelRight
+                [ Font.size 18 ]
+                (Element.text "This slide has no questions.")
+        }
 
 viewActionButtons : Element Msg
 viewActionButtons =
@@ -299,6 +320,27 @@ viewQuestionsTable { questions } =
             [ prepareQuestionsTableColumn numberQuestions ]
         }
 
+viewQuestionsArea : Model -> Element Msg
+viewQuestionsArea ( { skipQuestions } as model ) =
+    if ( skipQuestions ) then
+        Element.none
+    else
+        column
+            [ ]
+            [ viewActionButtons
+            , viewQuestionsTable model
+            ]
+
+viewQuestionsBlock : Model -> Element Msg
+viewQuestionsBlock model =
+    column
+        [ centerX
+        , spacing 10
+        ]
+        [ viewSkipQuestions model
+        , viewQuestionsArea model
+        ]
+
 view : Model -> Element Msg
 view ( { questions } as model ) =
     column
@@ -308,6 +350,5 @@ view ( { questions } as model ) =
         , centerX
         ]
         [ viewHeader
-        , viewActionButtons
-        , viewQuestionsTable model
+        , viewQuestionsBlock model
         ]

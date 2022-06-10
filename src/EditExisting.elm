@@ -1,4 +1,4 @@
-module EditExisting exposing (init, Msg, update)
+module EditExisting exposing (init, Msg(..), update)
 
 import Api
 import Data.Project as Project
@@ -7,9 +7,11 @@ import Element exposing (Element)
 import Http exposing (stringResolver)
 import LanguageHelpers
 import Loading
+import MessageHelpers exposing (sendCommandMessage)
 import ProjectAccess exposing (ProjectAccess)
 import Task exposing (Task)
 import Url.Builder as Builder
+import UUID exposing (Seeds)
 
 -- MODEL
 
@@ -71,6 +73,7 @@ type Msg =
     CompletedProjectLoad (Result Http.Error Project.Model)
     | EditMsg Edit.Msg
     | PassedSlowLoadThreshold
+    | UpdateSeeds Seeds
 
 updateProject : Model -> Model
 updateProject ( { project } as model ) =
@@ -113,12 +116,10 @@ update msg model =
             case result of
                 Ok project ->
                     let
-                        updatedProject = project
-                            |> Project.establishIndexes
-                            |> Project.establishSlideUUIDs
-                        updatedModel = updateProject { model | project = Edit.Clean (Api.Loaded updatedProject) }
+                        (establishedProject, command) = Edit.establishProject project
+                        updatedModel = updateProject { model | project = Edit.Clean (Api.Loaded establishedProject) }
                     in
-                    ( updatedModel, Cmd.none )
+                    ( updatedModel, Cmd.map EditMsg command )
 
                 Err _ ->
                     ( { model | project = Edit.Clean Api.Failed }
@@ -126,13 +127,18 @@ update msg model =
                     )
 
         EditMsg editMsg ->
-            let
-                ( updatedModel, updatedCmd ) =
-                    Edit.update editMsg model
-            in
-            ( updatedModel
-            , Cmd.map EditMsg updatedCmd
-            )
+            case editMsg of
+                Edit.UpdateSeeds seeds ->
+                    ( model, sendCommandMessage (UpdateSeeds seeds) )
+
+                _ ->
+                    let
+                        ( updatedModel, updatedCmd ) =
+                            Edit.update editMsg model
+                    in
+                    ( updatedModel
+                    , Cmd.map EditMsg updatedCmd
+                    )
 
         PassedSlowLoadThreshold ->
             let
@@ -153,6 +159,10 @@ update msg model =
                             model
             in
             ( updatedModel , Cmd.none )
+
+        -- Handled by parent
+        UpdateSeeds _ ->
+            ( model, Cmd.none )
 
 view : Model -> Element Msg
 view model =

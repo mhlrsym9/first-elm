@@ -3,6 +3,7 @@ module Flags exposing (Flags, init, Model, versionString)
 import Json.Decode exposing (decodeValue, Decoder, Error, int, string, succeed)
 import Json.Decode.Pipeline exposing (required)
 import Random
+import UUID exposing (Seeds)
 
 type alias Flags =
     { setupEditorName : String
@@ -26,7 +27,7 @@ type alias Model =
     , candorUrl : String
     , loadingPath : String
     , decodedMetadata : Result Error DecodedMetadata
-    , seeds : List Random.Seed
+    , seeds : Seeds
     }
 
 metadataDecoder : Decoder DecodedMetadata
@@ -37,6 +38,25 @@ metadataDecoder =
         |> required "buildRevision" int
         |> required "buildTag" string
 
+initialSeeds : List Int -> Seeds
+initialSeeds l =
+    case l of
+        a :: b :: c :: d :: _ ->
+            (Seeds
+                (Random.initialSeed a)
+                (Random.initialSeed b)
+                (Random.initialSeed c)
+                (Random.initialSeed d)
+            )
+
+        _ ->
+            (Seeds
+                (Random.initialSeed 12345)
+                (Random.initialSeed 23456)
+                (Random.initialSeed 34567)
+                (Random.initialSeed 45678)
+            )
+
 init : Flags -> Model
 init { setupEditorName, editorConfigName, candorUrl, loadingPath, metadata, seeds } =
     { setupEditorName = setupEditorName
@@ -44,7 +64,7 @@ init { setupEditorName, editorConfigName, candorUrl, loadingPath, metadata, seed
     , candorUrl = candorUrl
     , loadingPath = loadingPath
     , decodedMetadata = decodeValue metadataDecoder metadata
-    , seeds = List.map Random.initialSeed seeds
+    , seeds = initialSeeds seeds
     }
 
 versionString : Model -> String

@@ -1,4 +1,4 @@
-module Data.Slide exposing (encodeSlide, establishIndexes, init, InitParams, Model, Msg(..), slideDecoder, storeSlideContents, textToString, update, updateSlide, updateSlideIndex, view)
+module Data.Slide exposing (encodeSlide, establishIndexes, init, InitParams, Model, Msg(..), slideDecoder, storeSlideContents, textToString, update, updateSeeds, updateSlide, updateSlideIndex, view)
 
 import Api
 import Bytes exposing (Bytes)
@@ -26,7 +26,6 @@ import List.Extra
 import MessageHelpers exposing (sendCommandMessage)
 import Procedure exposing (Procedure)
 import Procedure.Program
-import Random
 import Task exposing (Task)
 import UIHelpers exposing (buttonAttributes, lightGrey, red, white)
 import Url.Builder as Builder
@@ -209,19 +208,6 @@ imagesAreaDecoder : Decoder Images
 imagesAreaDecoder =
     map HiddenImages slideComponentsDecoder
 
-initialSeeds : Flags.Model -> Seeds
-initialSeeds { seeds } =
-    case seeds of
-        ( a :: b :: c :: d :: _ ) ->
-            Seeds a b c d
-        _ ->
-            (Seeds
-                (Random.initialSeed 12345)
-                (Random.initialSeed 23456)
-                (Random.initialSeed 34567)
-                (Random.initialSeed 45678)
-            )
-
 soundsAreaDecoder : Decoder Sounds
 soundsAreaDecoder =
     map HiddenSounds slideComponentsDecoder
@@ -240,7 +226,7 @@ slideDecoder ( { flags } as initParams ) =
         |> custom mediaPositionDecoder
         |> hardcoded Procedure.Program.init
         |> required "questionsarea" QuestionsArea.questionsAreaDecoder
-        |> hardcoded ( initialSeeds flags )
+        |> hardcoded flags.seeds
         |> hardcoded UUID.nilString
         |> hardcoded 0
         |> custom slideTextDecoder
@@ -329,7 +315,7 @@ init ( { flags } as initParams ) slideId slideIndex =
     , mediaPosition = NoPosition
     , procModel = Procedure.Program.init
     , questionsArea = questionsArea
-    , seeds = initialSeeds flags
+    , seeds = flags.seeds
     , slideId = slideId
     , slideIndex = slideIndex
     , slideText = Text "This is a test"
@@ -395,6 +381,10 @@ updateSlide ( { mediaPosition } as model ) =
     in
     ( { model | mediaPosition = updatedMediaPosition }, makeDirty )
 
+updateSeeds : Model -> Seeds -> Model
+updateSeeds model updatedSeeds =
+    { model | seeds = updatedSeeds }
+
 -- UPDATE
 
 type Msg
@@ -405,11 +395,12 @@ type Msg
     | CopyUrl String
     | MakeDirty
     | MediaRequested ComponentType MediaRequest
-    | MediaTransferred ComponentType TransferResult
+    | MediaTransferred ComponentType Seeds TransferResult
     | PrepareMediaRequestDialog ComponentType MediaRequest
     | ProcedureMsg (Procedure.Program.Msg Msg)
     | QuestionsAreaMsg QuestionsArea.Msg
     | ShowDialog (Maybe (Config Msg))
+    | UpdateSeeds Seeds
     | UpdateVisibility Images Sounds Videos
 
 storeSlideContents : String -> Model -> Model
@@ -476,7 +467,8 @@ generateTransferProcedure p ( { componentDescription, seeds } as model ) ct =
         (uuid, updatedSeeds) = UUID.step seeds
         fname = UUID.toString uuid
     in
-    ( { model | componentDescription = "", componentUrl = "", seeds = updatedSeeds }
+-- seeds will be updated when project calls updateSeeds for each slide in the project!
+    ( { model | componentDescription = "", componentUrl = "" }
     , p
         |> Procedure.andThen
             (\(mimeType, bytes) ->
@@ -485,7 +477,7 @@ generateTransferProcedure p ( { componentDescription, seeds } as model ) ct =
                     |> Procedure.mapError (\err -> HttpError err)
             )
         |> Procedure.map ( \{ id } -> { description = componentDescription, id = id } )
-        |> Procedure.try ProcedureMsg (MediaTransferred ct)
+        |> Procedure.try ProcedureMsg (MediaTransferred ct updatedSeeds)
     )
 
 addComponentToProject : Model -> ComponentType-> (Model, Cmd Msg)
@@ -617,7 +609,11 @@ update msg ( { images, mediaPosition, procModel, questionsArea, sounds, videos }
                 Url ->
                     addUrlComponentToProject model ct
 
-        MediaTransferred ct result ->
+        MediaTransferred ct updatedSeeds result ->
+            let
+                updateSeedCommand = sendCommandMessage (UpdateSeeds updatedSeeds)
+                commands = Cmd.batch [ updateSeedCommand, makeProjectDirty ]
+            in
             case result of
                 Ok media ->
                     case ct of
@@ -625,7 +621,7 @@ update msg ( { images, mediaPosition, procModel, questionsArea, sounds, videos }
                            case images of
                                 VisibleImages l ->
                                     ( { model | images = VisibleImages ( media :: l ) }
-                                    , makeProjectDirty
+                                    , commands
                                     )
 
                                 _ ->
@@ -639,7 +635,7 @@ update msg ( { images, mediaPosition, procModel, questionsArea, sounds, videos }
                                         | sounds = VisibleSounds ( media :: l )
                                         , mediaPosition = updateMediaPosition model
                                         }
-                                        , makeProjectDirty
+                                        , commands
                                     )
 
                                 _ ->
@@ -653,14 +649,14 @@ update msg ( { images, mediaPosition, procModel, questionsArea, sounds, videos }
                                         | videos = VisibleVideos ( media :: l )
                                         , mediaPosition = updateMediaPosition model
                                         }
-                                        , makeProjectDirty
+                                        , commands
                                     )
 
                                 _ ->
                                     ( model, Cmd.none )
 
                 Err _ ->
-                    ( model, Cmd.none )
+                    ( model, updateSeedCommand )
 
         PrepareMediaRequestDialog ct mt ->
             ( model, showDialog ( Just ( prepareUrlConfig model ct mt ) ) )
@@ -685,6 +681,10 @@ update msg ( { images, mediaPosition, procModel, questionsArea, sounds, videos }
 
 -- Handled in Project model
         ShowDialog _ ->
+            (model, Cmd.none)
+
+-- Handled in Project model
+        UpdateSeeds _ ->
             (model, Cmd.none)
 
         UpdateVisibility updatedImages updatedSounds updatedVideos ->

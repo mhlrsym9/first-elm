@@ -29,6 +29,7 @@ import Start
 import Task exposing (Task)
 import Url exposing (Url)
 import Url.Builder as Builder
+import UUID exposing (Seeds)
 
 ---- PORTS ----
 
@@ -312,8 +313,17 @@ updateEdit editMsg editModel model =
     , Cmd.map EditMsg editCmd
     )
 
+updateSeeds : Model -> Edit.Model -> Seeds -> ( Model, Cmd Msg )
+updateSeeds ( { flags } as model ) editModel updatedSeeds =
+    let
+        updatedFlags = { flags | seeds = updatedSeeds }
+        updatedEditModel = { editModel | flags = updatedFlags }
+    in
+    ( { model | page = Edit updatedEditModel }
+    , Cmd.none )
+
 update : Msg -> Model -> ( Model, Cmd Msg )
-update msg model =
+update msg ( { flags } as model ) =
     case ( msg, model.page ) of
         ( CompletedPreliminaryLoad result, _ ) ->
             case result of
@@ -365,13 +375,18 @@ update msg model =
             ( model, Cmd.none )
 
         ( EditExistingMsg editExistingMsg, Edit editModel ) ->
-            let
-                ( updatedEditModel, editCmd ) =
-                    EditExisting.update editExistingMsg editModel
-            in
-            ( { model | page = Edit updatedEditModel }
-            , Cmd.map EditExistingMsg editCmd
-            )
+            case editExistingMsg of
+                EditExisting.UpdateSeeds updatedSeeds ->
+                    updateSeeds model editModel updatedSeeds
+
+                _ ->
+                    let
+                        ( updatedEditModel, editCmd ) =
+                            EditExisting.update editExistingMsg editModel
+                    in
+                    ( { model | page = Edit updatedEditModel }
+                    , Cmd.map EditExistingMsg editCmd
+                    )
 
         ( EditExistingMsg _, _ ) ->
 --            Debug.todo "Handle EditExistingMsg error case"
@@ -393,6 +408,9 @@ update msg model =
                 Edit.UpdateDirtyFlag flag ->
                     ( model, updateDirtyFlag flag )
 
+                Edit.UpdateSeeds updatedSeeds ->
+                    updateSeeds model editModel updatedSeeds
+
                 _ ->
                     updateEdit editMsg editModel model
 
@@ -401,13 +419,18 @@ update msg model =
             ( model, Cmd.none )
 
         ( EditNewMsg editMsg, Edit editModel ) ->
-            let
-                ( updatedEditModel, editCmd ) =
-                    EditNew.update editMsg editModel
-            in
-            ( { model | page = Edit updatedEditModel }
-            , Cmd.map EditNewMsg editCmd
-            )
+            case editMsg of
+                EditNew.UpdateSeeds seeds ->
+                    updateSeeds model editModel seeds
+
+                _ ->
+                    let
+                        ( updatedEditModel, editCmd ) =
+                            EditNew.update editMsg editModel
+                    in
+                    ( { model | page = Edit updatedEditModel }
+                    , Cmd.map EditNewMsg editCmd
+                    )
 
         ( EditNewMsg _, _ ) ->
 --            Debug.todo "Handle EditNewMsg error case"

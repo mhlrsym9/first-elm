@@ -7,6 +7,7 @@
     "@tinymce/tinymce-webcomponent": "^1.2.0"
   },
   "scripts": {
-    "build": "node generate-buildno.js && ELM_APP_CANDOR_URL=\"https://atcontoolstest.transparent.local:8443/CandorV2Server-standalone\" elm-app build"
+    "build": "node generate-buildno.js && ELM_APP_CANDOR_URL=\"https://atcontoolstest.transparent.local:8443/CandorV2Server-standalone\" elm-app build",
+    "build-qa": "node generate-buildno.js && ELM_APP_CANDOR_URL=\"http://candor2021.transparent.local:8080/CandorV2Server-standalone\" elm-app build"
   }
 }

@@ -1,4 +1,4 @@
-module Data.Project exposing (encodeProject, establishIndexes, establishSlideUUIDs, projectDecoder, init, initEmptyProject, initNewProject, Model, Msg(..), storeSlideContents, update, updateProject, view)
+module Data.Project exposing (encodeProject, establishIndexes, establishSlideUUIDs, projectDecoder, init, initEmptyProject, initNewProject, InitParams, Model, Msg(..), storeSlideContents, update, updateProject, view)
 
 import Data.ProjectHelpers as ProjectHelpers
 import Data.Slide as Slide
@@ -15,7 +15,6 @@ import Json.Decode.Pipeline exposing (hardcoded, required)
 import Json.Encode as Encode
 import LanguageHelpers
 import MessageHelpers exposing (sendCommandMessage)
-import Random
 import UIHelpers exposing (buttonAttributes)
 import UUID exposing (Seeds)
 
@@ -54,46 +53,38 @@ slidesDecoder initParams =
     (indexedList (slideDecoder initParams))
         |> Json.Decode.map (\l -> Dict.fromList l)
 
-initialSeeds : Seeds
-initialSeeds =
-    (Seeds
-        (Random.initialSeed 12345)
-        (Random.initialSeed 23456)
-        (Random.initialSeed 34567)
-        (Random.initialSeed 45678)
-    )
-
 projectDecoder : InitParams -> Decoder Model
 projectDecoder ( { flags } as initParams ) =
     succeed Model
         |> hardcoded initParams
         |> hardcoded 0
         |> required "slides" (slidesDecoder initParams)
-        |> hardcoded initialSeeds
+        |> hardcoded flags.seeds
 
 encodeProject : Model -> Encode.Value
 encodeProject { slides } =
     slides |> Dict.values |> Encode.list Slide.encodeSlide
 
-initProject : InitParams -> SlideDict -> Seeds -> Model
-initProject initParams slides seeds =
-    { initParams = initParams
-    , slideIndex = 0
-    , slides = slides
-    , seeds = seeds
-    }
-
 initEmptyProject : InitParams -> Model
 initEmptyProject initParams =
-    initProject initParams Dict.empty initialSeeds
+    { initParams = initParams
+    , slideIndex = 0
+    , slides = Dict.empty
+    , seeds = initParams.flags.seeds
+    }
 
-initNewProject : InitParams -> Model
-initNewProject initParams  =
+initNewProject : InitParams -> ( Model, Cmd Msg )
+initNewProject initParams =
     let
-        seeds = initialSeeds
-        (slides, updatedSeeds) = createNewSlide initParams 0 seeds
+        (slides, updatedSeeds) = createNewSlide (initEmptyProject initParams) 0
+        model =
+            { initParams = initParams
+            , slideIndex = 0
+            , slides = updateSlideSeeds updatedSeeds slides
+            , seeds = updatedSeeds
+            }
     in
-    initProject initParams slides updatedSeeds
+    ( model, sendCommandMessage (UpdateSeeds updatedSeeds) )
 
 init : InitParams -> Model
 init initParams =
@@ -115,12 +106,25 @@ establishSlideUUID index ( { initParams } as slideModel ) ( dict, seeds ) =
     in
     ( Dict.insert index updatedSlide dict, updatedSeeds )
 
-establishSlideUUIDs : Model -> Model
-establishSlideUUIDs ( { seeds, slides } as model ) =
+updateSlideSeeds : Seeds -> SlideDict -> SlideDict
+updateSlideSeeds updatedSeeds slides =
+    Dict.map (\_ slide -> Slide.updateSeeds slide updatedSeeds) slides
+
+updateSlideSeedsPair : (SlideDict, Seeds) -> (SlideDict, Seeds)
+updateSlideSeedsPair (slides, updatedSeeds) =
+    ( updateSlideSeeds updatedSeeds slides
+    , updatedSeeds
+    )
+
+establishSlideUUIDs : Model -> ( Model, Cmd Msg )
+establishSlideUUIDs ( { initParams, seeds, slides } as model ) =
     let
-        (updatedSlides, updatedSeeds) = Dict.foldl establishSlideUUID (Dict.empty, seeds) slides
+        (updatedSlides, updatedSeeds) =
+            Dict.foldl establishSlideUUID (Dict.empty, seeds) slides
+                |> updateSlideSeedsPair
     in
-    { model | slides = updatedSlides, seeds = updatedSeeds }
+    ( { model | seeds = updatedSeeds, slides = updatedSlides }
+    , sendCommandMessage (UpdateSeeds updatedSeeds) )
 
 updateSlide : Int -> Slide.Model -> (Dict Int Slide.Model, Bool) -> (Dict Int Slide.Model, Bool)
 updateSlide index slideModel (dict, dirty) =
@@ -153,34 +157,38 @@ type Msg =
     | ShowDialog ( Maybe (Config Msg) )
     | SlideMsg Slide.Msg
     | UpdateCurrentSlideContents Msg
+    | UpdateSeeds Seeds
 
-createNewSlide : InitParams -> Int -> Seeds -> (Dict Int Slide.Model, Seeds)
-createNewSlide { flags, knownLanguage, learningLanguage, projectName } slideIndex seeds =
+createNewSlide : Model -> Int -> (Dict Int Slide.Model, Seeds)
+createNewSlide { initParams, seeds } slideIndex =
     let
         (uuid, updatedSeeds) = UUID.step seeds
         slideInitParams =
-            { flags = flags
-            , knownLanguage = knownLanguage
-            , learningLanguage = learningLanguage
-            , projectName = projectName
+            { flags = initParams.flags
+            , knownLanguage = initParams.knownLanguage
+            , learningLanguage = initParams.learningLanguage
+            , projectName = initParams.projectName
             }
         newSlide = Slide.init slideInitParams (UUID.toString uuid) slideIndex
     in
     ( Dict.singleton slideIndex newSlide, updatedSeeds )
 
-insertSlideAtSlicePoint : Int -> Model -> Model
-insertSlideAtSlicePoint slicePoint ( { initParams, slides, seeds } as model ) =
+insertSlideAtSlicePoint : Model -> Int -> ( Model, Cmd Msg )
+insertSlideAtSlicePoint ( { initParams, slides } as model ) slicePoint =
     let
         (beforeSlides, afterSlides) = Dict.partition (\i _ -> (i < slicePoint)) slides
-        (newSlides, updatedSeeds) = createNewSlide initParams slicePoint seeds
+        (newSlides, updatedSeeds) = createNewSlide model slicePoint
         updatedSlides =
             afterSlides
                 |> Dict.Extra.mapKeys (\k -> k + 1)
                 |> updateSlideIndexes
                 |> Dict.union newSlides
                 |> Dict.union beforeSlides
+                |> updateSlideSeeds updatedSeeds
     in
-    { model | slides = updatedSlides, slideIndex = slicePoint, seeds = updatedSeeds }
+    ( { model | slides = updatedSlides, seeds = updatedSeeds, slideIndex = slicePoint }
+    , sendCommandMessage (UpdateSeeds updatedSeeds)
+    )
 
 storeSlideContents : String -> Model -> Model
 storeSlideContents slideContents ( { slideIndex, slides } as projectModel ) =
@@ -228,16 +236,36 @@ update msg ( { slideIndex, slides } as model ) =
             ( { model | slideIndex = updatedSlideIndex }, Cmd.none )
 
         InsertSlide ProjectHelpers.Top ->
-            ( insertSlideAtSlicePoint 0 model, makeProjectDirty )
+            let
+                (updatedModel, command) = insertSlideAtSlicePoint model 0
+            in
+            ( updatedModel
+            , Cmd.batch [ makeProjectDirty, command ]
+            )
 
         InsertSlide ProjectHelpers.Up ->
-            ( insertSlideAtSlicePoint slideIndex model, makeProjectDirty )
+            let
+                (updatedModel, command) = insertSlideAtSlicePoint model slideIndex
+            in
+            ( updatedModel
+            , Cmd.batch [ makeProjectDirty, command ]
+            )
 
         InsertSlide ProjectHelpers.Down ->
-            ( insertSlideAtSlicePoint (slideIndex + 1) model, makeProjectDirty )
+            let
+                (updatedModel, command) = insertSlideAtSlicePoint model (slideIndex + 1)
+            in
+            ( updatedModel
+            , Cmd.batch [ makeProjectDirty, command ]
+            )
 
         InsertSlide ProjectHelpers.Bottom ->
-            ( insertSlideAtSlicePoint (Dict.size slides) model, makeProjectDirty )
+            let
+                (updatedModel, command) = insertSlideAtSlicePoint model (Dict.size slides)
+            in
+            ( updatedModel
+            , Cmd.batch [ makeProjectDirty, command ]
+            )
 
 -- Handled by Edit module
         MakeDirty ->
@@ -311,7 +339,12 @@ update msg ( { slideIndex, slides } as model ) =
                             ( model, showDialog (Just (Dialog.map SlideMsg c) ) )
 
                         Nothing ->
-                            ( model, showDialog Nothing)
+                            ( model, showDialog Nothing )
+
+                Slide.UpdateSeeds updatedSeeds ->
+                    ( { model | seeds = updatedSeeds, slides = updateSlideSeeds updatedSeeds slides }
+                    , sendCommandMessage (UpdateSeeds updatedSeeds)
+                    )
 
                 _ ->
                     let
@@ -334,6 +367,9 @@ update msg ( { slideIndex, slides } as model ) =
         UpdateCurrentSlideContents _ ->
             ( model, Cmd.none )
 
+        -- Handled by parent
+        UpdateSeeds _ ->
+            ( model, Cmd.none )
 -- VIEW
 
 viewFirstSlideButton : Model -> Element Msg
