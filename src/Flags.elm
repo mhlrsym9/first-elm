@@ -1,4 +1,4 @@
-module Flags exposing (Flags, init, Model, versionString)
+module Flags exposing (Flags, init, Model, updateSeeds, versionString)
 
 import Json.Decode exposing (decodeValue, Decoder, Error, int, string, succeed)
 import Json.Decode.Pipeline exposing (required)
@@ -66,6 +66,10 @@ init { setupEditorName, editorConfigName, candorUrl, loadingPath, metadata, seed
     , decodedMetadata = decodeValue metadataDecoder metadata
     , seeds = initialSeeds seeds
     }
+
+updateSeeds : Model -> Seeds -> Model
+updateSeeds model updatedSeeds =
+    { model | seeds = updatedSeeds }
 
 versionString : Model -> String
 versionString { decodedMetadata } =

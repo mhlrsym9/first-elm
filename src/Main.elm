@@ -316,10 +316,10 @@ updateEdit editMsg editModel model =
 updateSeeds : Model -> Edit.Model -> Seeds -> ( Model, Cmd Msg )
 updateSeeds ( { flags } as model ) editModel updatedSeeds =
     let
-        updatedFlags = { flags | seeds = updatedSeeds }
-        updatedEditModel = { editModel | flags = updatedFlags }
+        updatedFlags = Flags.updateSeeds flags updatedSeeds
+        updatedEditModel = Edit.updateSeeds editModel updatedSeeds
     in
-    ( { model | page = Edit updatedEditModel }
+    ( { model | flags = updatedFlags, page = Edit updatedEditModel }
     , Cmd.none )
 
 update : Msg -> Model -> ( Model, Cmd Msg )

@@ -181,7 +181,6 @@ type alias Model =
     , mediaPosition : Position
     , procModel : Procedure.Program.Model Msg
     , questionsArea : QuestionsArea.Model
-    , seeds : Seeds
     , slideId : String
     , slideIndex : Int
     , slideText : Text
@@ -226,7 +225,6 @@ slideDecoder ( { flags } as initParams ) =
         |> custom mediaPositionDecoder
         |> hardcoded Procedure.Program.init
         |> required "questionsarea" QuestionsArea.questionsAreaDecoder
-        |> hardcoded flags.seeds
         |> hardcoded UUID.nilString
         |> hardcoded 0
         |> custom slideTextDecoder
@@ -304,7 +302,7 @@ textToString (Text val) =
     val
 
 init : InitParams -> String -> Int -> Model
-init ( { flags } as initParams ) slideId slideIndex =
+init initParams slideId slideIndex =
     let
         questionsArea = QuestionsArea.init { slideIndex = slideIndex }
     in
@@ -315,7 +313,6 @@ init ( { flags } as initParams ) slideId slideIndex =
     , mediaPosition = NoPosition
     , procModel = Procedure.Program.init
     , questionsArea = questionsArea
-    , seeds = flags.seeds
     , slideId = slideId
     , slideIndex = slideIndex
     , slideText = Text "This is a test"
@@ -382,8 +379,11 @@ updateSlide ( { mediaPosition } as model ) =
     ( { model | mediaPosition = updatedMediaPosition }, makeDirty )
 
 updateSeeds : Model -> Seeds -> Model
-updateSeeds model updatedSeeds =
-    { model | seeds = updatedSeeds }
+updateSeeds ( { initParams } as model ) updatedSeeds =
+    let
+        updatedInitParams = { initParams | flags = Flags.updateSeeds initParams.flags updatedSeeds }
+    in
+    { model | initParams = updatedInitParams }
 
 -- UPDATE
 
@@ -462,9 +462,9 @@ transferToServer { initParams } fileName fileMime componentBytes =
         }
 
 generateTransferProcedure : Procedure ProcedureError (String, Bytes) Msg -> Model -> ComponentType -> (Model, Cmd Msg)
-generateTransferProcedure p ( { componentDescription, seeds } as model ) ct =
+generateTransferProcedure p ( { componentDescription, initParams } as model ) ct =
     let
-        (uuid, updatedSeeds) = UUID.step seeds
+        (uuid, updatedSeeds) = UUID.step initParams.flags.seeds
         fname = UUID.toString uuid
     in
 -- seeds will be updated when project calls updateSeeds for each slide in the project!

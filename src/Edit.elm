@@ -1,4 +1,4 @@
-module Edit exposing (encodeProject, establishProject, Model, Modified(..), Msg(..), init, initNewProject, processDirtyMessage, storeSlideContents, update, view)
+module Edit exposing (encodeProject, establishProject, Model, Modified(..), Msg(..), init, initNewProject, processDirtyMessage, storeSlideContents, update, updateSeeds, view)
 
 import Api
 import Browser.Navigation as Navigation
@@ -77,6 +77,35 @@ establishProject project =
             |> Project.establishSlideUUIDs
     in
     (updatedProject, Cmd.map ProjectMsg command)
+
+updateProjectStatusSeeds : Api.Status Project.Model -> Seeds -> Api.Status Project.Model
+updateProjectStatusSeeds sp updatedSeeds =
+    case sp of
+        Api.Failed ->
+            Api.Failed
+
+        Api.Loading p ->
+            Api.Loading (Project.updateSeeds p updatedSeeds)
+
+        Api.LoadingSlowly p ->
+            Api.LoadingSlowly (Project.updateSeeds p updatedSeeds)
+
+        Api.Loaded p ->
+            Api.Loaded (Project.updateSeeds p updatedSeeds)
+
+updateSeeds : Model -> Seeds -> Model
+updateSeeds ( { flags, project } as model ) updatedSeeds =
+    let
+        updatedFlags = Flags.updateSeeds flags updatedSeeds
+        updatedProject =
+            case project of
+                Clean p ->
+                    Clean (updateProjectStatusSeeds p updatedSeeds)
+
+                Dirty p ->
+                    Dirty (updateProjectStatusSeeds p updatedSeeds)
+    in
+    { model | flags = updatedFlags, project = updatedProject }
 
 -- UPDATE
 
