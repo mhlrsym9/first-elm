@@ -1,4 +1,4 @@
-module Data.Project exposing (encodeProject, establishIndexes, establishSlideUUIDs, projectDecoder, init, initEmptyProject, initNewProject, InitParams, Model, Msg(..), storeSlideContents, update, updateProject, updateSeeds, view)
+module Data.Project exposing (encodeProject, establishIndexes, establishSlideUUIDs, init, initEmptyProject, initNewProject, InitParams, Model, Msg(..), processDirtySlideTextMessage, projectDecoder, storeSlideContents, update, updateProject, updateSeeds, view)
 
 import Data.ProjectHelpers as ProjectHelpers
 import Data.Slide as Slide
@@ -143,6 +143,18 @@ updateSeeds ( { initParams, slides } as model ) updatedSeeds =
         updatedSlides = updateSlideSeeds slides updatedSeeds
     in
     { model | initParams = updatedInitParams, slides = updatedSlides }
+
+processDirtySlideTextMessage : Model -> Bool -> Model
+processDirtySlideTextMessage ( { slideIndex, slides } as model ) isDirty =
+    let
+        currentSlide = Dict.get slideIndex slides
+    in
+    case currentSlide of
+        Nothing ->
+            model
+
+        Just slide ->
+            { model | slides = Dict.insert slideIndex ( Slide.processDirtySlideTextMessage slide isDirty ) slides }
 
 -- UPDATE
 
@@ -327,7 +339,7 @@ update msg ( { slideIndex, slides } as model ) =
 
         SlideMsg slideMsg ->
             case slideMsg of
-                Slide.MakeDirty ->
+                Slide.MakeProjectDirty ->
                     ( model, makeProjectDirty )
 
                 Slide.ShowDialog config ->

@@ -34,10 +34,10 @@ import UUID exposing (Seeds)
 ---- PORTS ----
 
 port syncMceEditor : () -> Cmd msg
-port updateDirtyFlag : Bool -> Cmd msg
+port updateDirtySlideTextFlag : Bool -> Cmd msg
 port consoleLog : String -> Cmd msg
 
-port dirtyReceived : (Bool -> msg) -> Sub msg
+port dirtySlideTextReceived : (Bool -> msg) -> Sub msg
 port mceEditorSubscription : (String -> msg) -> Sub msg
 
 ---- PROCEDURES ----
@@ -54,7 +54,7 @@ syncMceEditorProcedure nextMsg =
 subscriptions : Model -> Sub Msg
 subscriptions model =
     Sub.batch
-        [ dirtyReceived Dirty
+        [ dirtySlideTextReceived DirtySlideText
         , Procedure.Program.subscriptions model.procModel
         ]
 
@@ -157,7 +157,7 @@ type Msg
     | ConsoleOut String
     | CreateMsg Create.Msg
     | DeleteMsg Delete.Msg
-    | Dirty Bool
+    | DirtySlideText Bool
     | EditExistingMsg EditExisting.Msg
     | EditMsg Edit.Msg
     | EditNewMsg EditNew.Msg
@@ -361,16 +361,16 @@ update msg ( { flags } as model ) =
 --            Debug.todo "Handle CreateMsg error case"
             ( model, Cmd.none )
 
-        ( Dirty isDirty, Edit editModel ) ->
+        ( DirtySlideText isDirty, Edit editModel ) ->
             let
                 updatedEditModel =
-                    Edit.processDirtyMessage editModel isDirty
+                    Edit.processDirtySlideTextMessage editModel isDirty
             in
                 ( { model | page = Edit updatedEditModel }
                 , Cmd.none
                 )
 
-        ( Dirty _, _ ) ->
+        ( DirtySlideText _, _ ) ->
 --            Debug.todo "Handle Dirty"
             ( model, Cmd.none )
 
@@ -405,8 +405,8 @@ update msg ( { flags } as model ) =
                 Edit.UpdateCurrentSlideContents nextMsg ->
                     ( model, syncMceEditorProcedure (EditMsg nextMsg) )
 
-                Edit.UpdateDirtyFlag flag ->
-                    ( model, updateDirtyFlag flag )
+                Edit.UpdateDirtySlideTextFlag flag ->
+                    ( model, updateDirtySlideTextFlag flag )
 
                 Edit.UpdateSeeds updatedSeeds ->
                     updateSeeds model editModel updatedSeeds

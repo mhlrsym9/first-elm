@@ -2,7 +2,7 @@ import './main.css';
 import { Elm } from './Main.elm';
 import * as serviceWorker from './serviceWorker';
 import '@tinymce/tinymce-webcomponent';
-import {setupEditorName, extractEditorContents, editorConfigName, setDirtyFlag} from "./tinymce.js";
+import {setupEditorName, extractEditorContents, editorConfigName, setDirtySlideTextFlag} from "./tinymce.js";
 import loadingPath from '../public/images/loading.svg'
 import metadata from './metadata.json';
 import '@github/clipboard-copy-element';
@@ -25,7 +25,7 @@ function performConsoleLog(theStr) {
 }
 
 app.ports.syncMceEditor.subscribe(extractEditorContents);
-app.ports.updateDirtyFlag.subscribe(setDirtyFlag);
+app.ports.updateDirtySlideTextFlag.subscribe(setDirtySlideTextFlag);
 app.ports.consoleLog.subscribe(performConsoleLog);
 
 // unregister() to register() below. Note this comes with some pitfalls.

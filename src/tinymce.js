@@ -48,19 +48,19 @@ function editorConfigName() {
     return window.editorConfig.name;
 }
 
-// Fire off the dirtyReceived port by sending true
+// Fire off the dirtySlideTextReceived port
 function handleDirty() {
-    app.ports.dirtyReceived.send(currentEditor.isDirty());
+    app.ports.dirtySlideTextReceived.send(currentEditor.isDirty());
 }
 
 function extractEditorContents() {
     app.ports.mceEditorSubscription.send(currentEditor.getContent());
 }
 
-function setDirtyFlag(flag) {
+function setDirtySlideTextFlag(flag) {
     currentEditor.setDirty(flag);
-    app.ports.dirtyReceived.send(currentEditor.isDirty());
+    app.ports.dirtySlideTextReceived.send(currentEditor.isDirty());
 }
 
 // export { setupEditor, handleDirty };
-export { setupEditorName, editorConfigName, extractEditorContents, setDirtyFlag };
+export { setupEditorName, editorConfigName, extractEditorContents, setDirtySlideTextFlag };

@@ -1,4 +1,4 @@
-module Edit exposing (encodeProject, establishProject, Model, Modified(..), Msg(..), init, initNewProject, processDirtyMessage, storeSlideContents, update, updateSeeds, view)
+module Edit exposing (encodeProject, establishProject, Model, Modified(..), Msg(..), init, initNewProject, processDirtySlideTextMessage, storeSlideContents, update, updateSeeds, view)
 
 import Api
 import Browser.Navigation as Navigation
@@ -118,7 +118,7 @@ type Msg
     | Save
     | ShowDialog ( Maybe (Config Msg) )
     | UpdateCurrentSlideContents Msg
-    | UpdateDirtyFlag Bool
+    | UpdateDirtySlideTextFlag Bool
     | UpdateSeeds Seeds
 
 saveProjectDecoder : Decoder SaveResult
@@ -149,24 +149,55 @@ saveProject candorUrl json =
         , timeout = Nothing
         }
 
-processDirtyMessage : Model -> Bool -> Model
-processDirtyMessage ( { project } as model ) isDirty =
+extractStatusProject : Model -> Api.Status Project.Model
+extractStatusProject { project } =
+    case project of
+        Clean p ->
+            p
+        Dirty p ->
+            p
+
+updateDirtySlideTextFlag : Model -> Bool -> Api.Status Project.Model
+updateDirtySlideTextFlag model isDirty =
+    let
+        statusProject = extractStatusProject model
+    in
+    case statusProject of
+        Api.Failed ->
+            statusProject
+
+        Api.Loaded p ->
+            Api.Loaded (Project.processDirtySlideTextMessage p isDirty)
+
+        Api.Loading p ->
+            Api.Loading (Project.processDirtySlideTextMessage p isDirty)
+
+        Api.LoadingSlowly p ->
+            Api.LoadingSlowly (Project.processDirtySlideTextMessage p isDirty)
+
+processDirtySlideTextMessage : Model -> Bool -> Model
+processDirtySlideTextMessage ( { project } as model ) isDirty =
+    let
+        updatedStatusProject = updateDirtySlideTextFlag model isDirty
+    in
     case isDirty of
         True ->
             case project of
-                Clean p ->
-                    { model | project = Dirty p }
+                Clean _ ->
+                    { model | project = Dirty updatedStatusProject }
 
-                _ ->
-                    model
+                Dirty _ ->
+                    { model | project = Dirty updatedStatusProject }
 
         False ->
             case project of
-                Dirty p ->
-                    { model | project = Clean p }
+                Clean _ ->
+                    { model | project = Clean updatedStatusProject }
 
-                _ ->
-                    model
+-- Once the project is Dirty, the only way to clean it is via a save. The slide text is updated
+-- on every slide change and set to clean then but that does not save the project.
+                Dirty _ ->
+                    { model | project = Dirty updatedStatusProject }
 
 storeSlideContents : String -> Model -> Model
 storeSlideContents slideContents ( { project } as model ) =
@@ -210,10 +241,10 @@ update msg ( { knownLanguage, learningLanguage, projectName, project, flags } as
                 Ok _ ->
                     case project of
                         Dirty (Api.Loading pm) ->
-                            ( { model | project = Dirty (Api.Loaded pm) }, sendCommandMessage (UpdateDirtyFlag False) )
+                            ( { model | project = Clean (Api.Loaded pm) }, sendCommandMessage (UpdateDirtySlideTextFlag False) )
 
                         Dirty (Api.LoadingSlowly pm) ->
-                            ( { model | project = Dirty (Api.Loaded pm) }, sendCommandMessage (UpdateDirtyFlag False) )
+                            ( { model | project = Clean (Api.Loaded pm) }, sendCommandMessage (UpdateDirtySlideTextFlag False) )
 
                         _ ->
                             ( model, Cmd.none )
@@ -304,7 +335,7 @@ update msg ( { knownLanguage, learningLanguage, projectName, project, flags } as
         UpdateCurrentSlideContents _ ->
             ( model, Cmd.none )
 
-        UpdateDirtyFlag _ ->
+        UpdateDirtySlideTextFlag _ ->
             ( model, Cmd.none )
 
         -- Handled by parent

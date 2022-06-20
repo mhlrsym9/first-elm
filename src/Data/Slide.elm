@@ -1,4 +1,4 @@
-module Data.Slide exposing (encodeSlide, establishIndexes, init, InitParams, Model, Msg(..), slideDecoder, storeSlideContents, textToString, update, updateSeeds, updateSlide, updateSlideIndex, view)
+module Data.Slide exposing (encodeSlide, establishIndexes, init, InitParams, Model, Msg(..), processDirtySlideTextMessage, slideDecoder, storeSlideContents, textToString, update, updateSeeds, updateSlide, updateSlideIndex, view)
 
 import Api
 import Bytes exposing (Bytes)
@@ -17,12 +17,13 @@ import File.Select as Select
 import Flags exposing (Flags)
 import Http exposing (bytesBody, bytesResolver, stringResolver)
 import Html exposing (Html, text)
-import Html.Attributes exposing (attribute, class)
+import Html.Attributes exposing (attribute, class, title)
 import Json.Decode exposing (Decoder, field, list, map, maybe, string, succeed)
 import Json.Decode.Pipeline exposing (custom, hardcoded, optional, required)
 import Json.Encode as Encode
 import LanguageHelpers
 import List.Extra
+import Loading
 import MessageHelpers exposing (sendCommandMessage)
 import Procedure exposing (Procedure)
 import Procedure.Program
@@ -173,11 +174,18 @@ type MediaRequest
     = File
     | Url
 
+type MediaStatus
+    = Updated
+    | Updating
+    | UpdatingSlowly
+    | Failed
+
 type alias Model =
     { componentDescription : String
     , componentUrl : String
     , images : Images
     , initParams : InitParams
+    , isSlideTextDirty : Bool
     , mediaPosition : Position
     , procModel : Procedure.Program.Model Msg
     , questionsArea : QuestionsArea.Model
@@ -185,6 +193,7 @@ type alias Model =
     , slideIndex : Int
     , slideText : Text
     , sounds : Sounds
+    , status : MediaStatus
     , videos : Videos
     }
 
@@ -222,6 +231,7 @@ slideDecoder ( { flags } as initParams ) =
         |> hardcoded ""
         |> optional "images" imagesAreaDecoder (HiddenImages [])
         |> hardcoded initParams
+        |> hardcoded False
         |> custom mediaPositionDecoder
         |> hardcoded Procedure.Program.init
         |> required "questionsarea" QuestionsArea.questionsAreaDecoder
@@ -229,6 +239,7 @@ slideDecoder ( { flags } as initParams ) =
         |> hardcoded 0
         |> custom slideTextDecoder
         |> optional "sounds" soundsAreaDecoder (HiddenSounds [])
+        |> hardcoded Updated
         |> optional "videos" videosAreaDecoder (HiddenVideos [])
 
 encodeSlideComponent : SlideComponent -> Encode.Value
@@ -310,6 +321,7 @@ init initParams slideId slideIndex =
     , componentUrl = ""
     , images = HiddenImages [ ]
     , initParams = initParams
+    , isSlideTextDirty = False
     , mediaPosition = NoPosition
     , procModel = Procedure.Program.init
     , questionsArea = questionsArea
@@ -317,6 +329,7 @@ init initParams slideId slideIndex =
     , slideIndex = slideIndex
     , slideText = Text "This is a test"
     , sounds = HiddenSounds [ ]
+    , status = Updated
     , videos = HiddenVideos [ ]
     }
 
@@ -385,17 +398,24 @@ updateSeeds ( { initParams } as model ) updatedSeeds =
     in
     { model | initParams = updatedInitParams }
 
+processDirtySlideTextMessage : Model -> Bool -> Model
+processDirtySlideTextMessage model isDirty =
+    { model | isSlideTextDirty = isDirty }
+
 -- UPDATE
 
 type Msg
     = Cancelled
     | ChoosePosition Position
+    | CompletedMediaDelete ComponentType (Result Http.Error DeleteResult)
     | ComponentDescriptionInput String
     | ComponentUrlInput ComponentType String
     | CopyUrl String
-    | MakeDirty
+    | DeleteMedia ComponentType String
+    | MakeProjectDirty
     | MediaRequested ComponentType MediaRequest
     | MediaTransferred ComponentType Seeds TransferResult
+    | PassedSlowThreshold
     | PrepareMediaRequestDialog ComponentType MediaRequest
     | ProcedureMsg (Procedure.Program.Msg Msg)
     | QuestionsAreaMsg QuestionsArea.Msg
@@ -560,7 +580,7 @@ addUrlComponentToProject ( { componentUrl } as model ) ct =
 
 makeProjectDirty : Cmd Msg
 makeProjectDirty =
-    sendCommandMessage MakeDirty
+    sendCommandMessage MakeProjectDirty
 
 showDialog : Maybe (Config Msg) -> Cmd Msg
 showDialog config =
@@ -575,6 +595,78 @@ updateMediaPosition { mediaPosition } =
         a ->
             a
 
+type alias DeleteResult =
+    { id : String }
+
+deleteMediaDecoder : Decoder DeleteResult
+deleteMediaDecoder =
+    succeed DeleteResult
+        |> required "id" string
+
+deleteMediaTask : InitParams -> ComponentType -> String -> Task Http.Error DeleteResult
+deleteMediaTask { flags, knownLanguage, learningLanguage, projectName } componentType id =
+    let
+        kcc = LanguageHelpers.contentCodeStringFromLanguage knownLanguage
+        lcc = LanguageHelpers.contentCodeStringFromLanguage learningLanguage
+        url = Builder.relative [flags.candorUrl, (toBaseUrl componentType), kcc, lcc, projectName, id] []
+    in
+    Http.task
+        { method = "DELETE"
+        , headers = []
+        , url = url
+        , body = Http.emptyBody
+        , resolver = stringResolver ( Api.handleJsonResponse deleteMediaDecoder )
+        , timeout = Nothing
+        }
+
+notMatchSlideComponentId : DeleteResult -> SlideComponent -> Bool
+notMatchSlideComponentId dr sc =
+    (dr.id /= sc.id)
+
+deleteMedia : Model -> ComponentType -> DeleteResult -> Model
+deleteMedia ( { images, sounds, videos } as model ) ct dr =
+    let
+        filterFnc = List.filter (notMatchSlideComponentId dr)
+        updatedModel =
+            case ct of
+                Image ->
+                    let
+                        updatedImages =
+                            case images of
+                                VisibleImages l ->
+                                    VisibleImages (filterFnc l)
+
+                                HiddenImages l ->
+                                    HiddenImages (filterFnc l)
+                    in
+                    { model | images = updatedImages }
+
+                Sound ->
+                    let
+                        updatedSounds =
+                            case sounds of
+                                VisibleSounds l ->
+                                    VisibleSounds (filterFnc l)
+
+                                HiddenSounds l ->
+                                    HiddenSounds (filterFnc l)
+                    in
+                    { model | sounds = updatedSounds }
+
+                Video ->
+                    let
+                        updatedVideos =
+                            case videos of
+                                VisibleVideos l ->
+                                    VisibleVideos (filterFnc l)
+
+                                HiddenVideos l ->
+                                    HiddenVideos (filterFnc l)
+                    in
+                    { model | videos = updatedVideos }
+    in
+    { updatedModel | status = Updated }
+
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg ( { images, mediaPosition, procModel, questionsArea, sounds, videos } as model ) =
     case msg of
@@ -583,6 +675,17 @@ update msg ( { images, mediaPosition, procModel, questionsArea, sounds, videos }
 
         ChoosePosition position ->
             ( { model | mediaPosition = position }, makeProjectDirty )
+
+        CompletedMediaDelete ct result ->
+            case result of
+                Ok d ->
+                    let
+                        updatedModel = deleteMedia model ct d
+                    in
+                    ( { updatedModel | status = Updated }, makeProjectDirty )
+
+                Err _ ->
+                    ( { model | status = Failed }, Cmd.none )
 
         ComponentDescriptionInput s ->
             ( { model | componentDescription = s }, Cmd.none )
@@ -597,14 +700,31 @@ update msg ( { images, mediaPosition, procModel, questionsArea, sounds, videos }
         CopyUrl _ ->
             ( model, Cmd.none )
 
+        DeleteMedia ct id ->
+            ( { model | status = Updating }
+            , Cmd.batch
+                  [ (deleteMediaTask model.initParams ct id)
+                      |> Task.attempt (CompletedMediaDelete ct)
+                  , Task.perform (\_ -> PassedSlowThreshold) Loading.slowThreshold
+                  ]
+            )
+
 -- Handled in Project module
-        MakeDirty ->
+        MakeProjectDirty ->
             ( model, Cmd.none )
 
         MediaRequested ct mr ->
             case mr of
                 File ->
-                    addComponentToProject model ct
+                    let
+                        (updatedModel, commands) = addComponentToProject model ct
+                    in
+                    ( { updatedModel | status = Updating }
+                    , Cmd.batch
+                        [ commands
+                        , Task.perform (\_ -> PassedSlowThreshold) Loading.slowThreshold
+                        ]
+                    )
 
                 Url ->
                     addUrlComponentToProject model ct
@@ -657,6 +777,19 @@ update msg ( { images, mediaPosition, procModel, questionsArea, sounds, videos }
 
                 Err _ ->
                     ( model, updateSeedCommand )
+
+        PassedSlowThreshold ->
+            let
+                updatedStatus =
+                    case model.status of
+                        Updating ->
+                            UpdatingSlowly
+
+                        _ ->
+                            model.status
+            in
+            ( { model | status = updatedStatus }, Cmd.none )
+
 
         PrepareMediaRequestDialog ct mt ->
             ( model, showDialog ( Just ( prepareUrlConfig model ct mt ) ) )
@@ -870,7 +1003,7 @@ prepareCopyUrlButton { flags, knownLanguage, learningLanguage, projectName } com
     { header = Element.none
     , width = fill
     , view =
-        \{ description, id } ->
+        \{ id } ->
             let
                 url = Builder.relative
                     [ flags.candorUrl
@@ -884,31 +1017,61 @@ prepareCopyUrlButton { flags, knownLanguage, learningLanguage, projectName } com
                 node = Html.node "clipboard-copy"
                     [ attribute "value" url
                     , class "w3-button w3-black w3-round"
+                    , title id
                     ]
                     [ text "Copy URL to clipboard" ]
             in
             html node
     }
 
-viewComponentsTable : InitParams -> ComponentType -> List SlideComponent -> Element Msg
-viewComponentsTable initParams componentType components =
+toDeleteComponentButtonText : ComponentType -> Element Msg
+toDeleteComponentButtonText t =
+    Element.text ("Delete " ++ (toText t) )
+
+prepareDeleteComponentButton : Text -> ComponentType -> Column SlideComponent Msg
+prepareDeleteComponentButton slideText componentType =
+    { header = Element.none
+    , width = fill
+    , view =
+        \{ id } ->
+            if ( String.contains id ( textToString slideText ) ) then
+                Input.button
+                    buttonAttributes
+                    { onPress = Just (DeleteMedia componentType id)
+                    , label = toDeleteComponentButtonText componentType
+                    }
+            else
+                Element.none
+    }
+
+addDeleteComponentButtonIfNecessary : Model -> ComponentType -> List (Column SlideComponent Msg)
+addDeleteComponentButtonIfNecessary { initParams, isSlideTextDirty, slideText } componentType =
+    if ( isSlideTextDirty ) then
+        [ ]
+    else
+        [ prepareDeleteComponentButton slideText componentType ]
+
+viewComponentsTable : Model -> ComponentType -> List SlideComponent -> Element Msg
+viewComponentsTable ( { initParams } as model ) componentType components =
     table
         [ spacing 10 ]
         { data = components
         , columns =
-            [ prepareDescription
-            , prepareCopyUrlButton initParams componentType
-            ]
+            List.append
+                [ prepareDescription
+                , prepareCopyUrlButton initParams componentType
+                ]
+                (addDeleteComponentButtonIfNecessary model componentType)
         }
 
-viewComponents : Model -> InitParams -> ComponentType -> List SlideComponent -> Element Msg
-viewComponents model initParams componentType components =
+viewComponents : Model -> ComponentType -> List SlideComponent -> Element Msg
+viewComponents model componentType components =
     let
         t =
             if (List.isEmpty components) then
                 viewNoStagedComponents componentType
             else
-                viewComponentsTable initParams componentType components
+                viewComponentsTable model componentType components
     in
     column
         [ centerX
@@ -921,16 +1084,16 @@ viewComponents model initParams componentType components =
         ]
 
 viewSlideComponents : Model -> Element Msg
-viewSlideComponents ( { images, initParams, sounds, videos } as model ) =
+viewSlideComponents ( { images, sounds, videos } as model ) =
     case ( images, sounds, videos ) of
         ( VisibleImages vis, HiddenSounds _, HiddenVideos _ ) ->
-            viewComponents model initParams Image vis
+            viewComponents model Image vis
 
         ( HiddenImages _, VisibleSounds vss, HiddenVideos _ ) ->
-            viewComponents model initParams Sound vss
+            viewComponents model Sound vss
 
         ( HiddenImages _, HiddenSounds _, VisibleVideos vvs ) ->
-            viewComponents model initParams Video vvs
+            viewComponents model Video vvs
 
         _ ->
             Element.none
@@ -957,14 +1120,24 @@ viewQuestionsArea { initParams, questionsArea, slideId } =
     )
 
 view : Model -> Element Msg
-view model =
+view ( { initParams, slideId, status } as model ) =
+    let
+        spinner =
+            case status of
+                UpdatingSlowly ->
+                    Loading.iconElement initParams.flags.loadingPath
+
+                _ ->
+                    Element.none
+    in
     Keyed.column
         [ Font.size 14
         , centerX
         , spacing 10
         , padding 10
         ]
-        [ viewTinyMCEEditor model
+        [ ("candor-spinner-" ++ slideId, spinner)
+        , viewTinyMCEEditor model
         , viewSlideComponentsArea model
         , viewQuestionsArea model
         ]
