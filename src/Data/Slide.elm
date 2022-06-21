@@ -1035,13 +1035,13 @@ prepareDeleteComponentButton slideText componentType =
     , view =
         \{ id } ->
             if ( String.contains id ( textToString slideText ) ) then
+                Element.none
+            else
                 Input.button
                     buttonAttributes
                     { onPress = Just (DeleteMedia componentType id)
                     , label = toDeleteComponentButtonText componentType
                     }
-            else
-                Element.none
     }
 
 addDeleteComponentButtonIfNecessary : Model -> ComponentType -> List (Column SlideComponent Msg)
