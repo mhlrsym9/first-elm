@@ -18,7 +18,7 @@ import Flags exposing (Flags)
 import Http exposing (bytesBody, bytesResolver, stringResolver)
 import Html exposing (Html, text)
 import Html.Attributes exposing (attribute, class, title)
-import Json.Decode exposing (Decoder, field, list, map, maybe, string, succeed)
+import Json.Decode exposing (bool, Decoder, field, list, map, maybe, string, succeed)
 import Json.Decode.Pipeline exposing (custom, hardcoded, optional, required)
 import Json.Encode as Encode
 import LanguageHelpers
@@ -88,6 +88,7 @@ positionToString p =
 type alias SlideComponent =
     { description : String
     , id : String
+    , markedForDeletion : Bool
     }
 
 type alias TransferResponse =
@@ -154,13 +155,13 @@ toMimeTypes : ComponentType -> List String
 toMimeTypes ct =
     case ct of
         Image ->
-            ["image/jpeg", "image/png"]
+            [ "image/jpeg", "image/png" ]
 
         Sound ->
-            ["audio/mpg"]
+            [ "audio/mpg" ]
 
         Video ->
-            ["video/mp4"]
+            [ "video/mp4" ]
 
 type ProcedureError
     = HttpError Http.Error
@@ -202,6 +203,7 @@ slideComponentDecoder =
     succeed SlideComponent
         |> required "description" string
         |> required "id" string
+        |> optional "markedForDeletion" bool False
 
 slideComponentsDecoder : Decoder (List SlideComponent)
 slideComponentsDecoder =
@@ -243,10 +245,11 @@ slideDecoder ( { flags } as initParams ) =
         |> optional "videos" videosAreaDecoder (HiddenVideos [])
 
 encodeSlideComponent : SlideComponent -> Encode.Value
-encodeSlideComponent { description, id } =
+encodeSlideComponent { description, id, markedForDeletion } =
     Encode.object
         [ ( "description", Encode.string description )
         , ( "id", Encode.string id )
+        , ( "markedForDeletion", Encode.bool markedForDeletion)
         ]
 
 encodeSlideComponents : List SlideComponent -> Encode.Value
@@ -402,12 +405,32 @@ processDirtySlideTextMessage : Model -> Bool -> Model
 processDirtySlideTextMessage model isDirty =
     { model | isSlideTextDirty = isDirty }
 
+{-
+gatherMediaToDelete : Model -> List String
+gatherMediaToDelete { images, sounds, videos } =
+    let
+        imageList = extractImageComponents images
+        soundList = extractSoundComponents sounds
+        videoList = extractVideoComponents videos
+    in
+    List.concatMap
+        (\l ->
+            List.map
+                (\{id} -> id)
+                (
+                    List.filter
+                        (\{markedForDeletion} -> markedForDeletion)
+                        l
+                )
+        )
+        [ imageList, soundList, videoList ]
+-}
+
 -- UPDATE
 
 type Msg
     = Cancelled
     | ChoosePosition Position
-    | CompletedMediaDelete ComponentType (Result Http.Error DeleteResult)
     | ComponentDescriptionInput String
     | ComponentUrlInput ComponentType String
     | CopyUrl String
@@ -496,7 +519,7 @@ generateTransferProcedure p ( { componentDescription, initParams } as model ) ct
                     |> Procedure.fromTask
                     |> Procedure.mapError (\err -> HttpError err)
             )
-        |> Procedure.map ( \{ id } -> { description = componentDescription, id = id } )
+        |> Procedure.map ( \{ id } -> { description = componentDescription, id = id, markedForDeletion = False } )
         |> Procedure.try ProcedureMsg (MediaTransferred ct updatedSeeds)
     )
 
@@ -595,6 +618,7 @@ updateMediaPosition { mediaPosition } =
         a ->
             a
 
+{-
 type alias DeleteResult =
     { id : String }
 
@@ -618,15 +642,19 @@ deleteMediaTask { flags, knownLanguage, learningLanguage, projectName } componen
         , resolver = stringResolver ( Api.handleJsonResponse deleteMediaDecoder )
         , timeout = Nothing
         }
+-}
 
-notMatchSlideComponentId : DeleteResult -> SlideComponent -> Bool
-notMatchSlideComponentId dr sc =
-    (dr.id /= sc.id)
+notMatchSlideComponentId : String -> SlideComponent -> SlideComponent
+notMatchSlideComponentId idToMarkForDeletion sc =
+    if (idToMarkForDeletion == sc.id) then
+        { sc | markedForDeletion = True }
+    else
+        sc
 
-deleteMedia : Model -> ComponentType -> DeleteResult -> Model
-deleteMedia ( { images, sounds, videos } as model ) ct dr =
+markMediaForDeletion : Model -> ComponentType -> String -> Model
+markMediaForDeletion ( { images, sounds, videos } as model ) ct idToMarkForDeletion =
     let
-        filterFnc = List.filter (notMatchSlideComponentId dr)
+        mapFnc = List.map (notMatchSlideComponentId idToMarkForDeletion)
         updatedModel =
             case ct of
                 Image ->
@@ -634,10 +662,10 @@ deleteMedia ( { images, sounds, videos } as model ) ct dr =
                         updatedImages =
                             case images of
                                 VisibleImages l ->
-                                    VisibleImages (filterFnc l)
+                                    VisibleImages (mapFnc l)
 
                                 HiddenImages l ->
-                                    HiddenImages (filterFnc l)
+                                    HiddenImages (mapFnc l)
                     in
                     { model | images = updatedImages }
 
@@ -646,10 +674,10 @@ deleteMedia ( { images, sounds, videos } as model ) ct dr =
                         updatedSounds =
                             case sounds of
                                 VisibleSounds l ->
-                                    VisibleSounds (filterFnc l)
+                                    VisibleSounds (mapFnc l)
 
                                 HiddenSounds l ->
-                                    HiddenSounds (filterFnc l)
+                                    HiddenSounds (mapFnc l)
                     in
                     { model | sounds = updatedSounds }
 
@@ -658,10 +686,10 @@ deleteMedia ( { images, sounds, videos } as model ) ct dr =
                         updatedVideos =
                             case videos of
                                 VisibleVideos l ->
-                                    VisibleVideos (filterFnc l)
+                                    VisibleVideos (mapFnc l)
 
                                 HiddenVideos l ->
-                                    HiddenVideos (filterFnc l)
+                                    HiddenVideos (mapFnc l)
                     in
                     { model | videos = updatedVideos }
     in
@@ -675,17 +703,6 @@ update msg ( { images, mediaPosition, procModel, questionsArea, sounds, videos }
 
         ChoosePosition position ->
             ( { model | mediaPosition = position }, makeProjectDirty )
-
-        CompletedMediaDelete ct result ->
-            case result of
-                Ok d ->
-                    let
-                        updatedModel = deleteMedia model ct d
-                    in
-                    ( { updatedModel | status = Updated }, makeProjectDirty )
-
-                Err _ ->
-                    ( { model | status = Failed }, Cmd.none )
 
         ComponentDescriptionInput s ->
             ( { model | componentDescription = s }, Cmd.none )
@@ -701,12 +718,8 @@ update msg ( { images, mediaPosition, procModel, questionsArea, sounds, videos }
             ( model, Cmd.none )
 
         DeleteMedia ct id ->
-            ( { model | status = Updating }
-            , Cmd.batch
-                  [ (deleteMediaTask model.initParams ct id)
-                      |> Task.attempt (CompletedMediaDelete ct)
-                  , Task.perform (\_ -> PassedSlowThreshold) Loading.slowThreshold
-                  ]
+            ( markMediaForDeletion model ct id
+            , makeProjectDirty
             )
 
 -- Handled in Project module
@@ -776,7 +789,9 @@ update msg ( { images, mediaPosition, procModel, questionsArea, sounds, videos }
                                     ( model, Cmd.none )
 
                 Err _ ->
-                    ( model, updateSeedCommand )
+                    ( { model | status = Failed }
+                    , updateSeedCommand
+                    )
 
         PassedSlowThreshold ->
             let
@@ -1067,11 +1082,12 @@ viewComponentsTable ( { initParams } as model ) componentType components =
 viewComponents : Model -> ComponentType -> List SlideComponent -> Element Msg
 viewComponents model componentType components =
     let
+        nonDeletedComponents = List.filter (\{markedForDeletion} -> not markedForDeletion) components
         t =
             if (List.isEmpty components) then
                 viewNoStagedComponents componentType
             else
-                viewComponentsTable model componentType components
+                viewComponentsTable model componentType nonDeletedComponents
     in
     column
         [ centerX

@@ -133,6 +133,7 @@ encodeProject kl ll projectName project =
         , ( "l2", Encode.string ( LanguageHelpers.contentCodeStringFromLanguage ll ) )
         , ( "project", Encode.string projectName )
         , ( "slides", Project.encodeProject project )
+--        , ( "mediaToDelete", Encode.list Encode.string ( Project.gatherMediaToDelete project ) )
         ]
 
 saveProject : String -> Encode.Value -> Task Http.Error SaveResult

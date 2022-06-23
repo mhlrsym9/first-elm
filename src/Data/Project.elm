@@ -156,6 +156,12 @@ processDirtySlideTextMessage ( { slideIndex, slides } as model ) isDirty =
         Just slide ->
             { model | slides = Dict.insert slideIndex ( Slide.processDirtySlideTextMessage slide isDirty ) slides }
 
+{-
+gatherMediaToDelete : Model -> List String
+gatherMediaToDelete { slides } =
+    List.Extra.unique ( List.concatMap (\s -> Slide.gatherMediaToDelete s) (Dict.values slides) )
+-}
+
 -- UPDATE
 
 type Msg =
