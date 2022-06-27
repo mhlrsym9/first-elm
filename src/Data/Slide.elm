@@ -448,7 +448,7 @@ type Msg
 
 storeSlideContents : String -> Model -> Model
 storeSlideContents slideContents model =
-    { model | slideText = Text slideContents }
+    { model | isSlideTextDirty = False, slideText = Text slideContents }
 
 transferResponseDecoder : Decoder TransferResponse
 transferResponseDecoder =
