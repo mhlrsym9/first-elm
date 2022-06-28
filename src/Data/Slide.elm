@@ -746,6 +746,7 @@ update msg ( { images, mediaPosition, procModel, questionsArea, sounds, videos }
             let
                 updateSeedCommand = sendCommandMessage (UpdateSeeds updatedSeeds)
                 commands = Cmd.batch [ updateSeedCommand, makeProjectDirty ]
+                updatedModel = { model | status = Updated }
             in
             case result of
                 Ok media ->
@@ -753,18 +754,18 @@ update msg ( { images, mediaPosition, procModel, questionsArea, sounds, videos }
                         Image ->
                            case images of
                                 VisibleImages l ->
-                                    ( { model | images = VisibleImages ( media :: l ) }
+                                    ( { updatedModel | images = VisibleImages ( media :: l ) }
                                     , commands
                                     )
 
                                 _ ->
-                                    ( model, Cmd.none )
+                                    ( updatedModel, Cmd.none )
 
                         Sound ->
                             case sounds of
                                 VisibleSounds l ->
                                     (
-                                        { model
+                                        { updatedModel
                                         | sounds = VisibleSounds ( media :: l )
                                         , mediaPosition = updateMediaPosition model
                                         }
@@ -772,13 +773,13 @@ update msg ( { images, mediaPosition, procModel, questionsArea, sounds, videos }
                                     )
 
                                 _ ->
-                                    ( model, Cmd.none )
+                                    ( updatedModel, Cmd.none )
 
                         Video ->
                             case videos of
                                 VisibleVideos l ->
                                     (
-                                        { model
+                                        { updatedModel
                                         | videos = VisibleVideos ( media :: l )
                                         , mediaPosition = updateMediaPosition model
                                         }
@@ -786,7 +787,7 @@ update msg ( { images, mediaPosition, procModel, questionsArea, sounds, videos }
                                     )
 
                                 _ ->
-                                    ( model, Cmd.none )
+                                    ( updatedModel, Cmd.none )
 
                 Err _ ->
                     ( { model | status = Failed }

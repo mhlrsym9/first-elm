@@ -12,6 +12,7 @@ iconElement loadingPath =
     Element.image
         [ Element.width (Element.px 200)
         , Element.height (Element.px 200)
+        , Element.centerX
         ]
         { src = loadingPath
         , description = "Loading..."
