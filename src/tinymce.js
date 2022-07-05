@@ -23,7 +23,8 @@ window.editorConfig = {
         format: { title: 'Format', items: 'bold italic underline strikethrough superscript subscript codeformat | formats blockformats fontformats fontsizes align lineheight | forecolor backcolor | removeformat' },
         tools: { title: 'Tools', items: 'code' },
         table: { title: 'Table', items: 'inserttable | cell row column | tableprops deletetable' }
-    }
+    },
+    default_link_target: '_blank'
 }
 
 // Since the just created function has an empty string for a name, give it a name

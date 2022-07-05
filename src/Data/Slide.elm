@@ -18,7 +18,7 @@ import Flags exposing (Flags)
 import Http exposing (bytesBody, bytesResolver, stringResolver)
 import Html exposing (Html, text)
 import Html.Attributes exposing (attribute, class, title)
-import Json.Decode exposing (bool, Decoder, field, list, map, maybe, string, succeed)
+import Json.Decode exposing (bool, Decoder, field, list, map, string, succeed)
 import Json.Decode.Pipeline exposing (custom, hardcoded, optional, required)
 import Json.Encode as Encode
 import LanguageHelpers
@@ -43,47 +43,6 @@ type alias InitParams =
     , learningLanguage : LanguageHelpers.Language
     , projectName : String
     }
-
-type Position
-    = Left
-    | Center
-    | Right
-    | NoPosition
-
-stringToPosition : Maybe String -> Position
-stringToPosition s =
-    case s of
-        Just str ->
-            case (String.toLower str) of
-                "left" ->
-                    Left
-
-                "center" ->
-                    Center
-
-                "right" ->
-                    Right
-
-                _ ->
-                    NoPosition
-
-        Nothing ->
-            NoPosition
-
-positionToString : Position -> String
-positionToString p =
-    case p of
-        Left ->
-            "left"
-
-        Center ->
-            "center"
-
-        Right ->
-            "right"
-
-        NoPosition ->
-            ""
 
 type alias SlideComponent =
     { description : String
@@ -187,7 +146,6 @@ type alias Model =
     , images : Images
     , initParams : InitParams
     , isSlideTextDirty : Bool
-    , mediaPosition : Position
     , procModel : Procedure.Program.Model Msg
     , questionsArea : QuestionsArea.Model
     , slideId : String
@@ -209,11 +167,6 @@ slideComponentsDecoder : Decoder (List SlideComponent)
 slideComponentsDecoder =
     list slideComponentDecoder
 
-mediaPositionDecoder : Decoder Position
-mediaPositionDecoder =
-    maybe (field "position" string)
-        |> map stringToPosition
-
 imagesAreaDecoder : Decoder Images
 imagesAreaDecoder =
     map HiddenImages slideComponentsDecoder
@@ -234,7 +187,6 @@ slideDecoder ( { flags } as initParams ) =
         |> optional "images" imagesAreaDecoder (HiddenImages [])
         |> hardcoded initParams
         |> hardcoded False
-        |> custom mediaPositionDecoder
         |> hardcoded Procedure.Program.init
         |> required "questionsarea" QuestionsArea.questionsAreaDecoder
         |> hardcoded UUID.nilString
@@ -296,11 +248,10 @@ encodeVideos videos =
     encodeSlideComponents (extractVideoComponents videos)
 
 encodeSlide : Model -> Encode.Value
-encodeSlide { slideText, mediaPosition, questionsArea, images, sounds, videos } =
+encodeSlide { slideText, questionsArea, images, sounds, videos } =
     Encode.object
         [ ( "slide", Encode.string (textToString slideText) )
         , ( "display", Encode.string "initial")
-        , ( "position", Encode.string ( positionToString mediaPosition ) )
         , ( "questionsarea", QuestionsArea.encodeQuestionsArea questionsArea )
         , ( "images", encodeImages images )
         , ( "sounds", encodeSounds sounds )
@@ -325,7 +276,6 @@ init initParams slideId slideIndex =
     , images = HiddenImages [ ]
     , initParams = initParams
     , isSlideTextDirty = False
-    , mediaPosition = NoPosition
     , procModel = Procedure.Program.init
     , questionsArea = questionsArea
     , slideId = slideId
@@ -352,47 +302,9 @@ establishIndexes slideIndex ( { questionsArea } as model ) =
             , slideIndex = slideIndex
     }
 
-areThereNoSounds : Model -> Bool
-areThereNoSounds { sounds } =
-    let
-        sl =
-            case sounds of
-                HiddenSounds l ->
-                    l
-
-                VisibleSounds l ->
-                    l
-    in
-    List.isEmpty sl
-
-areThereNoVideos : Model -> Bool
-areThereNoVideos { videos } =
-    let
-        sl =
-            case videos of
-                HiddenVideos l ->
-                    l
-
-                VisibleVideos l ->
-                    l
-    in
-    List.isEmpty sl
-
 updateSlide : Model -> (Model, Bool)
-updateSlide ( { mediaPosition } as model ) =
-    let
-        ( updatedMediaPosition, makeDirty ) =
-            case mediaPosition of
-                NoPosition ->
-                    if ( (areThereNoSounds model) && (areThereNoVideos model) ) then
-                        ( NoPosition, False )
-                    else
-                        ( Left, True )
-
-                _ ->
-                    ( mediaPosition, False )
-    in
-    ( { model | mediaPosition = updatedMediaPosition }, makeDirty )
+updateSlide ( model ) =
+    ( model, False )
 
 updateSeeds : Model -> Seeds -> Model
 updateSeeds ( { initParams } as model ) updatedSeeds =
@@ -430,7 +342,6 @@ gatherMediaToDelete { images, sounds, videos } =
 
 type Msg
     = Cancelled
-    | ChoosePosition Position
     | ComponentDescriptionInput String
     | ComponentUrlInput ComponentType String
     | CopyUrl String
@@ -609,15 +520,6 @@ showDialog : Maybe (Config Msg) -> Cmd Msg
 showDialog config =
     sendCommandMessage (ShowDialog config)
 
-updateMediaPosition : Model -> Position
-updateMediaPosition { mediaPosition } =
-    case mediaPosition of
-        NoPosition ->
-            Left
-
-        a ->
-            a
-
 {-
 type alias DeleteResult =
     { id : String }
@@ -696,13 +598,10 @@ markMediaForDeletion ( { images, sounds, videos } as model ) ct idToMarkForDelet
     { updatedModel | status = Updated }
 
 update : Msg -> Model -> (Model, Cmd Msg)
-update msg ( { images, mediaPosition, procModel, questionsArea, sounds, videos } as model ) =
+update msg ( { images, procModel, questionsArea, sounds, videos } as model ) =
     case msg of
         Cancelled ->
             ( { model | componentDescription = "", componentUrl = "" }, showDialog Nothing)
-
-        ChoosePosition position ->
-            ( { model | mediaPosition = position }, makeProjectDirty )
 
         ComponentDescriptionInput s ->
             ( { model | componentDescription = s }, Cmd.none )
@@ -767,7 +666,6 @@ update msg ( { images, mediaPosition, procModel, questionsArea, sounds, videos }
                                     (
                                         { updatedModel
                                         | sounds = VisibleSounds ( media :: l )
-                                        , mediaPosition = updateMediaPosition model
                                         }
                                         , commands
                                     )
@@ -781,7 +679,6 @@ update msg ( { images, mediaPosition, procModel, questionsArea, sounds, videos }
                                     (
                                         { updatedModel
                                         | videos = VisibleVideos ( media :: l )
-                                        , mediaPosition = updateMediaPosition model
                                         }
                                         , commands
                                     )
@@ -924,28 +821,6 @@ viewSlideComponentButtons model =
         , viewSlideMediaElements Sound model
         , viewSlideMediaElements Video model
         ]
-
-viewPositionRadioButtons : Model -> Element Msg
-viewPositionRadioButtons ( { mediaPosition, slideId } as model ) =
-    if ( (areThereNoSounds model) && (areThereNoVideos model) ) then
-        Element.none
-    else
-        row
-            [ centerX ]
-            [ Input.radioRow
-                [ spacing 10 ]
-                { onChange = ChoosePosition
-                , selected = Just mediaPosition
-                , label = Input.labelLeft
-                    [ centerY ]
-                    ( Element.text "Position: " )
-                , options =
-                    [ Input.option Left ( Element.text "Left" )
-                    , Input.option Center ( Element.text "Center" )
-                    , Input.option Right ( Element.text "Right" )
-                    ]
-                }
-            ]
 
 toComponentDescription : ComponentType -> String
 toComponentDescription t =
@@ -1124,7 +999,6 @@ viewSlideComponentsArea ( { initParams, slideId } as model ) =
         ]
         [ viewSlideComponentsHeader
         , viewSlideComponentButtons model
-        , viewPositionRadioButtons model
         , viewSlideComponents model
         ]
     )
